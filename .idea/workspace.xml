@@ -1,0 +1,412 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="9b69dfce-b9ae-483d-8ae8-e0c602ae0bc4" name="更改" comment="ALPSRP265560610-AP_26556_FBS_F0610_RT1.zip文件超过github上限，不提供">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/4-空间数据分析/4.2-【ArcGIS Python系列】/4.2.18-使用深度学习评估棕榈树健康情况.ipynb" beforeDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+        <option value="CC0-1.0" />
+        <option value="Jupyter Notebook" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitToolBoxStore">
+    <option name="projectConfigVersion" value="5" />
+    <option name="recentBranches">
+      <RecentBranches>
+        <option name="branchesForRepo">
+          <list>
+            <RecentBranchesForRepo>
+              <option name="branches">
+                <list>
+                  <RecentBranch>
+                    <option name="branchName" value="main" />
+                    <option name="lastUsedInstant" value="1693281312" />
+                  </RecentBranch>
+                </list>
+              </option>
+              <option name="repositoryRootUrl" value="file://$PROJECT_DIR$" />
+            </RecentBranchesForRepo>
+          </list>
+        </option>
+      </RecentBranches>
+    </option>
+  </component>
+  <component name="HighlightingSettingsPerFile">
+    <setting file="file://$PROJECT_DIR$/../../../../../../Program Files/ArcGIS/Pro/Resources/ArcPy/arcpy/__init__.py" root0="SKIP_INSPECTION" />
+    <setting file="file://$USER_HOME$/anaconda3/envs/arcgispro-py3-clone/Lib/site-packages/pandas/io/excel/_base.py" root0="SKIP_INSPECTION" />
+  </component>
+  <component name="MarkdownSettingsMigration">
+    <option name="stateVersion" value="1" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 3
+}</component>
+  <component name="ProjectId" id="2TgTdiu5tIk1kMRzhaQpnY464jh" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/hncdj/Documents/Python_/Python辅助城市研究/Urban-Spatial-Data-Analysis-Notebook&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  },
+  &quot;keyToStringList&quot;: {
+    &quot;com.intellij.ide.scratch.ScratchImplUtil$2/新建临时文件&quot;: [
+      &quot;Python&quot;
+    ]
+  }
+}</component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Users\hncdj\Documents\Python_\Python辅助城市研究\Urban-Spatial-Data-Analysis-Notebook\5-机器学习" />
+      <recent name="C:\Users\hncdj\Documents\Python_\Python辅助城市研究\Urban-Spatial-Data-Analysis-Notebook\workfile\output" />
+      <recent name="C:\Users\hncdj\Documents\Python_\Python辅助城市研究\Urban-Spatial-Data-Analysis-Notebook\4-空间数据分析\4.2-【ArcGIS Python系列】\resource\OD图" />
+      <recent name="C:\Users\hncdj\Documents\Python_\Python辅助城市研究\Urban-Spatial-Data-Analysis-Notebook\4-空间数据分析\4.2-【ArcGIS Python系列】" />
+      <recent name="C:\Users\hncdj\Documents\Python_\Python辅助城市研究\Urban-Spatial-Data-Analysis-For-Beginners\4-空间数据分析\4.2-arcpy" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\hncdj\Documents\Python_\Python辅助城市研究\Urban-Spatial-Data-Analysis-Notebook\4-空间数据分析\4.2-【ArcGIS Python系列】" />
+      <recent name="C:\Users\hncdj\Documents\Python_\Python辅助城市研究\Urban-Spatial-Data-Analysis-For-Beginners\tools" />
+      <recent name="C:\Users\hncdj\Documents\Python_\Python辅助城市研究\Urban-Spatial-Data-Analysis-For-Beginners" />
+      <recent name="C:\Users\hncdj\Documents\Python_\Python辅助城市研究\Urban-Spatial-Data-Analysis-For-Beginners\4-空间数据分析\4.2-arcpy\resource" />
+      <recent name="C:\Users\hncdj\Documents\Python_\Python辅助城市研究\Urban-Spatial-Data-Analysis-For-Beginners\4-空间数据分析\4.2-arcpy\resource\data5" />
+    </key>
+  </component>
+  <component name="RunManager" selected="Python.notebook2md">
+    <configuration name="listfile" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="Urban-Spatial-Data-Analysis-For-Beginners" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/tools" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/tools/listfile.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="notebook2md" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="Urban-Spatial-Data-Analysis-For-Beginners" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/tools" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/tools/notebook2md.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="scratch" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="Classify_Imagery_with_Python" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$APPLICATION_CONFIG_DIR$/scratches" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$APPLICATION_CONFIG_DIR$/scratches/scratch.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="yibu" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="Urban-Spatial-Data-Analysis-For-Beginners" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/4-空间数据分析/4.2-arcpy" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/4-空间数据分析/4.2-arcpy/yibu.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python.yibu" />
+        <item itemvalue="Python.scratch" />
+        <item itemvalue="Python.notebook2md" />
+        <item itemvalue="Python.listfile" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="应用程序级" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="默认任务">
+      <changelist id="9b69dfce-b9ae-483d-8ae8-e0c602ae0bc4" name="更改" comment="" />
+      <created>1691465049658</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1691465049658</updated>
+      <workItem from="1691465051028" duration="645000" />
+      <workItem from="1691485758128" duration="11000" />
+      <workItem from="1691502857871" duration="1974000" />
+      <workItem from="1691556800104" duration="35000" />
+      <workItem from="1691590861606" duration="1625000" />
+      <workItem from="1691734683472" duration="2921000" />
+      <workItem from="1691827780923" duration="25000" />
+      <workItem from="1691937661143" duration="21000" />
+      <workItem from="1692165782132" duration="1635000" />
+      <workItem from="1692271123922" duration="3491000" />
+      <workItem from="1702529382097" duration="433000" />
+      <workItem from="1702538768661" duration="6814000" />
+    </task>
+    <task id="LOCAL-00001" summary="提交文件">
+      <option name="closed" value="true" />
+      <created>1691734744954</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1691734744954</updated>
+    </task>
+    <task id="LOCAL-00002" summary="提交文件">
+      <option name="closed" value="true" />
+      <created>1692176074512</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1692176074512</updated>
+    </task>
+    <task id="LOCAL-00003" summary="修改错别字，修复链接">
+      <option name="closed" value="true" />
+      <created>1702529482135</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1702529482135</updated>
+    </task>
+    <task id="LOCAL-00004" summary="修改错别字，修复链接">
+      <option name="closed" value="true" />
+      <created>1702529503622</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1702529503622</updated>
+    </task>
+    <task id="LOCAL-00005" summary="Remove LFS">
+      <option name="closed" value="true" />
+      <created>1702539068415</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1702539068415</updated>
+    </task>
+    <task id="LOCAL-00006" summary="Remove previously tracked files now ignored">
+      <option name="closed" value="true" />
+      <created>1702539320374</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1702539320374</updated>
+    </task>
+    <task id="LOCAL-00007" summary="Remove previously tracked files now ignored">
+      <option name="closed" value="true" />
+      <created>1702539384104</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1702539384104</updated>
+    </task>
+    <task id="LOCAL-00008" summary="Remove previously tracked files now ignored">
+      <option name="closed" value="true" />
+      <created>1702539778699</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1702539778699</updated>
+    </task>
+    <task id="LOCAL-00009" summary="提交文件">
+      <option name="closed" value="true" />
+      <created>1702539830401</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1702539830401</updated>
+    </task>
+    <task id="LOCAL-00010" summary="修改">
+      <option name="closed" value="true" />
+      <created>1702541372738</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1702541372738</updated>
+    </task>
+    <task id="LOCAL-00011" summary="上传大部分resource文件">
+      <option name="closed" value="true" />
+      <created>1702541596150</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1702541596150</updated>
+    </task>
+    <task id="LOCAL-00012" summary="上传大部分resource文件">
+      <option name="closed" value="true" />
+      <created>1702541691725</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1702541691725</updated>
+    </task>
+    <task id="LOCAL-00013" summary="ALPSRP265560610-AP_26556_FBS_F0610_RT1.zip文件超过github上限，不提供">
+      <option name="closed" value="true" />
+      <created>1702543698542</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1702543698542</updated>
+    </task>
+    <task id="LOCAL-00014" summary="ALPSRP265560610-AP_26556_FBS_F0610_RT1.zip文件超过github上限，不提供">
+      <option name="closed" value="true" />
+      <created>1702543716900</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1702543716900</updated>
+    </task>
+    <task id="LOCAL-00015" summary="ALPSRP265560610-AP_26556_FBS_F0610_RT1.zip文件超过github上限，不提供">
+      <option name="closed" value="true" />
+      <created>1702544662674</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1702544662674</updated>
+    </task>
+    <task id="LOCAL-00016" summary="ALPSRP265560610-AP_26556_FBS_F0610_RT1.zip文件超过github上限，不提供">
+      <option name="closed" value="true" />
+      <created>1702545396698</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1702545396698</updated>
+    </task>
+    <option name="localTasksCounter" value="17" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="UnknownFeatures">
+    <option featureType="dependencySupport" implementationName="executable:docker" />
+    <option featureType="dependencySupport" implementationName="executable:kubectl" />
+    <option featureType="dependencySupport" implementationName="python:azure-storage-blob" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State>
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="main" />
+                      </list>
+                    </value>
+                  </entry>
+                </map>
+              </option>
+            </State>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="\" />
+    <MESSAGE value="修改错别字，修复链接" />
+    <MESSAGE value="Remove LFS" />
+    <MESSAGE value="Remove previously tracked files now ignored" />
+    <MESSAGE value="提交文件" />
+    <MESSAGE value="修改" />
+    <MESSAGE value="上传大部分resource文件" />
+    <MESSAGE value="ALPSRP265560610-AP_26556_FBS_F0610_RT1.zip文件超过github上限，不提供" />
+    <option name="LAST_COMMIT_MESSAGE" value="ALPSRP265560610-AP_26556_FBS_F0610_RT1.zip文件超过github上限，不提供" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="jupyter-line">
+          <url>notebook://C:/Users/hncdj/Documents/Python_/Python辅助城市研究/Urban-Spatial-Data-Analysis-For-Beginners/4-空间数据分析/4.2-arcpy/4.2.3-arcpy基础(1).ipynb</url>
+          <line>3</line>
+          <option name="timeStamp" value="1" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="jupyter-line">
+          <url>notebook://C:/Users/hncdj/Documents/Python_/Python辅助城市研究/Urban-Spatial-Data-Analysis-For-Beginners/4-空间数据分析/4.2-arcpy/4.2.8-栅格数据.ipynb</url>
+          <line>79</line>
+          <option name="timeStamp" value="6" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
+  </component>
+</project>

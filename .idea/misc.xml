@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="Black">
+    <option name="pathToExecutable" value="C:\Program Files\ArcGIS\Pro\bin\Python\envs\arcgispro-py3\Scripts\black.exe" />
+    <option name="sdkUUID" value="23b673fa-57c4-4fe3-83ea-0fdf3718c3e6" />
+  </component>
+  <component name="ProjectRootManager" version="2" project-jdk-name="arcgispro-py3-dl" project-jdk-type="Python SDK" />
+  <component name="PyCharmDSProjectLayout">
+    <option name="id" value="JupyterRightHiddenStructureLayout" />
+  </component>
+</project>

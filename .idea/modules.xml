@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/4-空间数据分析/4.2-【ArcGIS Python系列】/resource/Classify_Imagery_with_Python/.idea/Classify_Imagery_with_Python.iml" filepath="$PROJECT_DIR$/4-空间数据分析/4.2-【ArcGIS Python系列】/resource/Classify_Imagery_with_Python/.idea/Classify_Imagery_with_Python.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/Urban-Spatial-Data-Analysis-For-Beginners.iml" filepath="$PROJECT_DIR$/.idea/Urban-Spatial-Data-Analysis-For-Beginners.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../../GIS/Lessons/获取哨兵2遥感地图并计算ndvi/.idea/获取哨兵2遥感地图并计算ndvi.iml" filepath="$PROJECT_DIR$/../../GIS/Lessons/获取哨兵2遥感地图并计算ndvi/.idea/获取哨兵2遥感地图并计算ndvi.iml" />
+    </modules>
+  </component>
+</project>
