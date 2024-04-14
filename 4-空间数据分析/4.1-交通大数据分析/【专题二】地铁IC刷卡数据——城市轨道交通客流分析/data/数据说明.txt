@@ -1,0 +1,12 @@
+数据：
+2015公交卡数据 - IC刷卡数据全部
+SPTCC-20150401-sample.csv - IC刷卡数据抽样
+od-20150401-sample.csv - 地铁站点OD
+od_path.csv - OD间的路径信息，记录每条od经过那些轨道断面
+edge.csv - 轨道网络构建的边信息
+
+地理信息文件:
+stop.csv - 轨道线网站点数据
+line.json - 轨道线网线型数据
+metro_line_splited.json - 切分后的轨道线网线型数据
+
