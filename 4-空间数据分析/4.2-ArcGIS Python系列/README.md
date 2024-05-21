@@ -1,76 +1,70 @@
+> ±¾ÎÄÔÚÎÒµÄ²©¿ÍÍ¬²½¸üĞÂ£º[ArcGIS Pro ºÍ ArcPy »ù´¡](https://blog.renhai-lab.tech/tutorials/arcgis-pro-and-arcpy-basics)
+> ¡¾ArcGIS PythonÏµÁĞ¡¿±Ê¼ÇÎªÑ§Ï°`ArcGIS Pro`ºÍ`Arcpy`¹ı³ÌÖĞµÄ×Ü½á£¬¼ÇÏÂÀ´·½±ã»Ø¿´£¬×îĞÂ°æ±¾»áÓÅÏÈ·¢²¼ÔÚ[ÎÒµÄ²©¿Í](https://blog.renhai-lab.tech/)ºÍ[GITHUB](https://github.com/renhai-lab)£¬±Ê¼Ç·ÖÎª»ù´¡½Ì³ÌºÍ°¸ÀıÁ½¸öÄ£¿é¡£
 
+## »ù´¡½Ì³Ì²¿·Ö
 
-# æ–‡ç« ç´¢å¼•
+- [Ò»¡¢Arcpy½éÉÜºÍ°²×°](https://blog.renhai-lab.tech/archives/4.2.1-Arcpy%E4%BB%8B%E7%BB%8D%E5%92%8C%E5%AE%89%E8%A3%85)£ºÂõ³öGIS×Ô¶¯»¯µÄµÚÒ»²½¡£
+- [¶ş¡¢ArcGIS ProºÍArcMapµÄÇø±ğ](https://blog.renhai-lab.tech/archives/4.2.2-ArcGIS-Pro-or-ArcMap)£ºÁË½âĞÂÒ»´úGISÈí¼şµÄÌØµã¡£
+- [Èı¡¢Arcpy»ù´¡](https://blog.renhai-lab.tech/archives/4.2.3-arcpy%E5%9F%BA%E7%A1%80)£ºÕÆÎÕ¿Õ¼äÊı¾İ´¦ÀíµÄºËĞÄ¼¼ÄÜ¡£
+- [ËÄ¡¢Ì½Ë÷¿Õ¼äÊı¾İ](https://blog.renhai-lab.tech/archives/4.2.4-%E6%8E%A2%E7%B4%A2%E7%A9%BA%E9%97%B4%E6%95%B0%E6%8D%AE)£ºÉîÈëÀí½â¿Õ¼äÊı¾İ½á¹¹¡£
+- [Îå¡¢´¦ÀíµØÀíÊı¾İÒì³£](https://blog.renhai-lab.tech/archives/4.2.6-%E5%A4%84%E7%90%86%E5%9C%B0%E7%90%86%E6%95%B0%E6%8D%AE%E5%BC%82%E5%B8%B8)£ºÑ§Ï°ÈçºÎ¿ìËÙ¶¨Î»ÎÊÌâºÍ½â¾öÎÊÌâ¡£
+- [Áù¡¢´¦Àí¼¸ºÎÊı¾İ](https://blog.renhai-lab.tech/archives/4.2.7-%E5%A4%84%E7%90%86%E5%87%A0%E4%BD%95%E6%95%B0%E6%8D%AE)£ºÕÆÎÕ¼¸ºÎ·ÖÎöµÄ¹Ø¼ü¼¼Êõ¡£
+- [Æß¡¢´¦ÀíÕ¤¸ñÊı¾İ](https://blog.renhai-lab.tech/archives/4.2.8-%E6%A0%85%E6%A0%BC%E6%95%B0%E6%8D%AE)£ºÕÆÎÕÍ¼Ïñ·ÖÎöµÄ¹Ø¼ü¼¼Êõ¡£
+- [°Ë¡¢ÖÆÍ¼Ä£¿é](https://blog.renhai-lab.tech/archives/4.2.9-%E5%88%B6%E5%9B%BE%E6%A8%A1%E5%9D%97)£ºÑ§Ï°ÈçºÎ½«ÄãµÄ³öÍ¼×Ô¶¯»¯¡£
+- [¾Å¡¢×Ô¶¨Òå¹¤¾ßÏä](https://blog.renhai-lab.tech/archives/4.2.10-%E8%87%AA%E5%AE%9A%E4%B9%89%E5%B7%A5%E5%85%B7%E7%AE%B1)£º´òÔì¸öĞÔ»¯µÄGIS¹¤¾ß¼¯¡£
+- [Ê®¡¢ArcGIS_Pro³£¼ûÎÊÌâ](https://blog.renhai-lab.tech/archives/4.2.11-ArcGIS-Pro-issues)£º»¶Ó­ÌáÎÊ¡£
 
-> ã€ArcGIS Pythonç³»åˆ—ã€‘ç³»åˆ—ç¬”è®°ä¸ºå­¦ä¹ ArcGIS Proå’ŒArcPyè¿‡ç¨‹ä¸­çš„æ€»ç»“ï¼Œè®°ä¸‹æ¥æ–¹ä¾¿å›çœ‹ï¼Œæœ€æ–°ç‰ˆæœ¬ä¼šä¼˜å…ˆå‘å¸ƒåœ¨[æˆ‘çš„åšå®¢](https://blog.renhai-lab.tech/)å’Œ[GITHUB](https://github.com/renhai-lab)ã€‚
+## °¸Àı²¿·Ö
 
-**ã€ArcGIS Pythonç³»åˆ—ã€‘æ•™ç¨‹éƒ¨åˆ†ï¼š**
+- [ÀûÓÃArcGIS PythonÅúÁ¿´¦ÀíµØÀíÊı¾İµÄ×ø±êÏµ](https://blog.renhai-lab.tech/archives/4.2.12-%E5%88%A9%E7%94%A8ArcGIS_Python%E6%89%B9%E9%87%8F%E5%A4%84%E7%90%86%E5%9C%B0%E7%90%86%E6%95%B0%E6%8D%AE%E7%9A%84%E5%9D%90%E6%A0%87%E7%B3%BB)£ºÌá¸ßÊı¾İ´¦ÀíĞ§ÂÊ¡£
+- [Ê¹ÓÃArcGIS Python¼ì²âºéË®Ó°ÏñµÄÇøÓò](https://blog.renhai-lab.tech/archives/%E5%AE%9E%E6%93%8D2-%E4%BD%BF%E7%94%A8ArcGIS_Python%E6%A3%80%E6%B5%8B%E6%B4%AA%E6%B0%B4%E5%BD%B1%E5%83%8F%E7%9A%84%E5%8C%BA%E5%9F%9F)£ºÓ¦ÓÃGIS¼¼Êõ½â¾öÊµ¼ÊÎÊÌâ¡£
+- [ÀûÓÃArcGIS_PythonÖÆ×÷¿¼ÂÇÂ·¿öµÄ½»Í¨µÈÊ±È¦](https://blog.renhai-lab.tech/archives/4.2.14-%E5%AE%9E%E6%93%8D3-%E5%88%A9%E7%94%A8ArcGIS_Python%E5%88%B6%E4%BD%9C%E8%80%83%E8%99%91%E8%B7%AF%E5%86%B5%E7%9A%84%E4%BA%A4%E9%80%9A%E7%AD%89%E6%97%B6%E5%9C%88)£ºÌ½Ë÷½»Í¨ÍøÂç·ÖÎöµÄĞÂ·½·¨¡£
+- [ÀûÓÃArcGIS ProÖÆ×÷»¡ÏßODÍ¼](https://blog.renhai-lab.tech/archives/4.2.16-%E5%88%A9%E7%94%A8ArcGIS_Pro%E5%88%B6%E4%BD%9C%E5%BC%A7%E7%BA%BFOD%E5%9B%BE)£º´´ÔìÖ±¹ÛµÄµØÀíÊı¾İÕ¹Ê¾¡£
+- [Ê¹ÓÃArcGIS Pro¶ÔÎÀĞÇÍ¼½øĞĞ½¨ÖşÂÖÀªÊ¶±ğºÍ³µÁ¾¼ì²â](https://blog.renhai-lab.tech/archives/4.2.17-arcpy-dl)£ºÀûÓÃÉî¶ÈÑ§Ï°½âËøÒ£¸ĞÍ¼ÏñµÄÇ±Á¦¡£
 
-- [ä¸€ã€Arcpyä»‹ç»å’Œå®‰è£…ã€ArcGIS Pythonç³»åˆ—ã€‘](https://blog.renhai-lab.tech/archives/4.2.1-Arcpy%E4%BB%8B%E7%BB%8D%E5%92%8C%E5%AE%89%E8%A3%85)
-- [äºŒã€ArcGIS Proå’ŒArcMapçš„åŒºåˆ«ã€ArcGIS Pythonç³»åˆ—ã€‘](https://blog.renhai-lab.tech/archives/4.2.2-ArcGIS%20Pro%E5%92%8CArcMap%E7%9A%84%E5%8C%BA%E5%88%AB)
-- [ä¸‰ã€ArcpyåŸºç¡€ã€ArcGIS Pythonç³»åˆ—ã€‘](https://blog.renhai-lab.tech/archives/4.2.3-arcpy%E5%9F%BA%E7%A1%80)
+## ¿Î³Ì¶ÔÓ¦µÄPython´úÂëÎÄ¼ş
 
-- [å››ã€æ¢ç´¢ç©ºé—´æ•°æ®ã€ArcGIS Pythonç³»åˆ—ã€‘](https://blog.renhai-lab.tech/archives/4.2.4-%E6%8E%A2%E7%B4%A2%E7%A9%BA%E9%97%B4%E6%95%B0%E6%8D%AE)
+ÍĞ¹ÜÔÚGithub£º[Urban-Spatial-Data-Analysis-Notebook/4-¿Õ¼äÊı¾İ·ÖÎö/4.2-ArcGIS PythonÏµÁĞ at main ¡¤ renhai-lab/Urban-Spatial-Data-Analysis-Notebook ¡¤ GitHub](https://github.com/renhai-lab/Urban-Spatial-Data-Analysis-Notebook/tree/main/4-%E7%A9%BA%E9%97%B4%E6%95%B0%E6%8D%AE%E5%88%86%E6%9E%90/4.2-ArcGIS%20Python%E7%B3%BB%E5%88%97)
 
-- [äº”ã€å¤„ç†åœ°ç†æ•°æ®å¼‚å¸¸ã€ArcGIS Pythonç³»åˆ—ã€‘](https://blog.renhai-lab.tech/archives/4.2.6-%E5%A4%84%E7%90%86%E5%9C%B0%E7%90%86%E6%95%B0%E6%8D%AE%E5%BC%82%E5%B8%B8)
-- [å…­ã€å¤„ç†å‡ ä½•æ•°æ®ã€ArcGIS Pythonç³»åˆ—ã€‘](https://blog.renhai-lab.tech/archives/4.2.7-%E5%A4%84%E7%90%86%E5%87%A0%E4%BD%95%E6%95%B0%E6%8D%AE)
+- [4.2.3-arcpy»ù´¡(´úÂëÁ·Ï°).ipynb](4.2.3-arcpy%BB%F9%B4%A1%28%B4%FA%C2%EB%C1%B7%CF%B0%29.ipynb)
+- [4.2.4-Ì½Ë÷¿Õ¼äÊı¾İ(´úÂëÁ·Ï°).ipynb](4.2.4-%CC%BD%CB%F7%BF%D5%BC%E4%CA%FD%BE%DD%28%B4%FA%C2%EB%C1%B7%CF%B0%29.ipynb)
+- [4.2.5-Ê¾Àı1£ºÊ¹ÓÃArcpy½øĞĞGISÈË¿Ú¿Õ¼ä·Ö²¼Êı¾İÌ½Ë÷.ipynb](4.2.5-%CA%BE%C0%FD1%A3%BA%CA%B9%D3%C3Arcpy%BD%F8%D0%D0GIS%C8%CB%BF%DA%BF%D5%BC%E4%B7%D6%B2%BC%CA%FD%BE%DD%CC%BD%CB%F7.ipynb)
+- [4.2.7-´¦Àí¼¸ºÎÊı¾İ´úÂëÁ·Ï°ºÍÊ¾Àı2.ipynb](4.2.7-%B4%A6%C0%ED%BC%B8%BA%CE%CA%FD%BE%DD%B4%FA%C2%EB%C1%B7%CF%B0%BA%CD%CA%BE%C0%FD2.ipynb)
+- [4.2.8-Õ¤¸ñÊı¾İ(´úÂëÁ·Ï°).ipynb](4.2.8-%D5%A4%B8%F1%CA%FD%BE%DD%28%B4%FA%C2%EB%C1%B7%CF%B0%29.ipynb)
+- [4.2.9-ÖÆÍ¼Ä£¿é.ipynb](4.2.9-%D6%C6%CD%BC%C4%A3%BF%E9.ipynb)
+- [4.2.12-Êµ²Ù1-ÀûÓÃPythonÅúÁ¿´¦ÀíµØÀíÊı¾İµÄ×ø±êÏµ.ipynb](4.2.12-%CA%B5%B2%D91-%C0%FB%D3%C3Python%C5%FA%C1%BF%B4%A6%C0%ED%B5%D8%C0%ED%CA%FD%BE%DD%B5%C4%D7%F8%B1%EA%CF%B5.ipynb)
+- [4.2.13-Êµ²Ù2-Ê¹ÓÃ Python ¶ÔÍ¼ÏñÖĞµÄºéË®½øĞĞ·ÖÀà.ipynb](4.2.13-%CA%B5%B2%D92-%CA%B9%D3%C3%20Python%20%B6%D4%CD%BC%CF%F1%D6%D0%B5%C4%BA%E9%CB%AE%BD%F8%D0%D0%B7%D6%C0%E0.ipynb)
+- [4.2.14-Êµ²Ù3-ÖÆ×÷¿¼ÂÇÂ·¿öµÄ½»Í¨µÈÊ±È¦.ipynb](4.2.14-%CA%B5%B2%D93-%D6%C6%D7%F7%BF%BC%C2%C7%C2%B7%BF%F6%B5%C4%BD%BB%CD%A8%B5%C8%CA%B1%C8%A6.ipynb)
 
-- [ä¸ƒã€å¤„ç†æ …æ ¼æ•°æ®ã€ArcGIS Pythonç³»åˆ—ã€‘](https://blog.renhai-lab.tech/archives/4.2.8-%E6%A0%85%E6%A0%BC%E6%95%B0%E6%8D%AE)
+## ×ÊÔ´
 
-- [å…«ã€åˆ¶å›¾æ¨¡å—ã€ArcGIS Pythonç³»åˆ—ã€‘](https://blog.renhai-lab.tech/archives/4.2.9-%E5%88%B6%E5%9B%BE%E6%A8%A1%E5%9D%97)
-- [ä¹ã€è‡ªå®šä¹‰å·¥å…·ç®±ã€ArcGIS Pythonç³»åˆ—ã€‘](https://blog.renhai-lab.tech/archives/4.2.10-%E8%87%AA%E5%AE%9A%E4%B9%89%E5%B7%A5%E5%85%B7%E7%AE%B1)
-- [åã€ArcGIS_Proå¸¸è§é—®é¢˜ã€ArcGIS Pythonç³»åˆ—ã€‘](https://blog.renhai-lab.tech/archives/4.2.11-ArcGIS_Pro%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98)
+#### <u>¡°[ 4.2-ArcGIS PythonÏµÁĞ/resources](4-%BF%D5%BC%E4%CA%FD%BE%DD%B7%D6%CE%F6%2F4.2-ArcGIS%20Python%CF%B5%C1%D0%2Fresources)¡±</u>µÄÎÄ¼şÔÚ£º
 
-**ã€ArcGIS Pythonç³»åˆ—ã€‘jupyter notebookï¼š**
+| [°Ù¶ÈÍøÅÌ](Á´½Ó£ºhttps://pan.baidu.com/s/10acEcyXlQFFrpiUbZy-2xw?pwd=ij72 ÌáÈ¡Âë£ºij72) | °¢ÀïÔÆÅÌ¿ì´«Á´½Ó |
+| --------------------------------------------------------------------------------------- | ---------------- |
 
-- [4.2.3-arcpyåŸºç¡€(ä»£ç ç»ƒä¹ ).ipynb](4-%BF%D5%BC%E4%CA%FD%BE%DD%B7%D6%CE%F6%2F4.2-ArcGIS%20Python%CF%B5%C1%D0%2F4.2.3-arcpy%BB%F9%B4%A1%28%B4%FA%C2%EB%C1%B7%CF%B0%29.ipynb)
-- [4.2.4-æ¢ç´¢ç©ºé—´æ•°æ®(ä»£ç ç»ƒä¹ ).ipynb](4-%BF%D5%BC%E4%CA%FD%BE%DD%B7%D6%CE%F6%2F4.2-ArcGIS%20Python%CF%B5%C1%D0%2F4.2.4-%CC%BD%CB%F7%BF%D5%BC%E4%CA%FD%BE%DD%28%B4%FA%C2%EB%C1%B7%CF%B0%29.ipynb)
-- [4.2.5-ç¤ºä¾‹1ï¼šä½¿ç”¨Arcpyè¿›è¡ŒGISäººå£ç©ºé—´åˆ†å¸ƒæ•°æ®æ¢ç´¢.ipynb](4-%BF%D5%BC%E4%CA%FD%BE%DD%B7%D6%CE%F6%2F4.2-ArcGIS%20Python%CF%B5%C1%D0%2F4.2.5-%CA%BE%C0%FD1%A3%BA%CA%B9%D3%C3Arcpy%BD%F8%D0%D0GIS%C8%CB%BF%DA%BF%D5%BC%E4%B7%D6%B2%BC%CA%FD%BE%DD%CC%BD%CB%F7.ipynb)
-- [4.2.7-å¤„ç†å‡ ä½•æ•°æ®ä»£ç ç»ƒä¹ å’Œç¤ºä¾‹2.ipynb](4-%BF%D5%BC%E4%CA%FD%BE%DD%B7%D6%CE%F6%2F4.2-ArcGIS%20Python%CF%B5%C1%D0%2F4.2.7-%B4%A6%C0%ED%BC%B8%BA%CE%CA%FD%BE%DD%B4%FA%C2%EB%C1%B7%CF%B0%BA%CD%CA%BE%C0%FD2.ipynb)
-- [4.2.8-æ …æ ¼æ•°æ®(ä»£ç ç»ƒä¹ ).ipynb](4-%BF%D5%BC%E4%CA%FD%BE%DD%B7%D6%CE%F6%2F4.2-ArcGIS%20Python%CF%B5%C1%D0%2F4.2.8-%D5%A4%B8%F1%CA%FD%BE%DD%28%B4%FA%C2%EB%C1%B7%CF%B0%29.ipynb)
-- [4.2.9-åˆ¶å›¾æ¨¡å—.ipynb](4-%BF%D5%BC%E4%CA%FD%BE%DD%B7%D6%CE%F6%2F4.2-ArcGIS%20Python%CF%B5%C1%D0%2F4.2.9-%D6%C6%CD%BC%C4%A3%BF%E9.ipynb)
-- [4.2.12-å®æ“1-åˆ©ç”¨Pythonæ‰¹é‡å¤„ç†åœ°ç†æ•°æ®çš„åæ ‡ç³».ipynb](4-%BF%D5%BC%E4%CA%FD%BE%DD%B7%D6%CE%F6%2F4.2-ArcGIS%20Python%CF%B5%C1%D0%2F4.2.12-%CA%B5%B2%D91-%C0%FB%D3%C3Python%C5%FA%C1%BF%B4%A6%C0%ED%B5%D8%C0%ED%CA%FD%BE%DD%B5%C4%D7%F8%B1%EA%CF%B5.ipynb)
-- [4.2.13-å®æ“2-ä½¿ç”¨ Python å¯¹å›¾åƒä¸­çš„æ´ªæ°´è¿›è¡Œåˆ†ç±».ipynb](4-%BF%D5%BC%E4%CA%FD%BE%DD%B7%D6%CE%F6%2F4.2-ArcGIS%20Python%CF%B5%C1%D0%2F4.2.13-%CA%B5%B2%D92-%CA%B9%D3%C3%20Python%20%B6%D4%CD%BC%CF%F1%D6%D0%B5%C4%BA%E9%CB%AE%BD%F8%D0%D0%B7%D6%C0%E0.ipynb)
-- [4.2.14-å®æ“3-åˆ¶ä½œè€ƒè™‘è·¯å†µçš„äº¤é€šç­‰æ—¶åœˆ.ipynb](4-%BF%D5%BC%E4%CA%FD%BE%DD%B7%D6%CE%F6%2F4.2-ArcGIS%20Python%CF%B5%C1%D0%2F4.2.14-%CA%B5%B2%D93-%D6%C6%D7%F7%BF%BC%C2%C7%C2%B7%BF%F6%B5%C4%BD%BB%CD%A8%B5%C8%CA%B1%C8%A6.ipynb)
+> °¢ÀïÔÆÅÌ¿ì´«Á´½ÓĞèÒªÊÖ¶¯·¢ËÍ£¬ĞèÒªµÄ¹Ø×¢¹«ÖÚºÅ¡¾renhai-lab¡¿Ë½ĞÅ¡¾Arcpy½Ì³Ì×ÊÔ´¡¿£¬ÊÕµ½ºóÎÒ»á·¢ËÍ¸øÄã¡££©
 
-### **ã€ArcGIS Pythonç³»åˆ—ã€‘ resources æ–‡ä»¶**
+## ÍØÕ¹×ÊÁÏ
 
-#### <u>â€œ[ 4.2-ArcGIS Pythonç³»åˆ—/resources](4-%BF%D5%BC%E4%CA%FD%BE%DD%B7%D6%CE%F6%2F4.2-ArcGIS%20Python%CF%B5%C1%D0%2Fresources)â€</u>çš„æ–‡ä»¶åœ¨ï¼š
+- [ArcGIS_Pro¹Ù·½¿Î³ÌÕûÀí](https://blog.renhai-lab.tech/archives/arcgispro-courses)
 
-| [ç™¾åº¦ç½‘ç›˜](é“¾æ¥ï¼šhttps://pan.baidu.com/s/10acEcyXlQFFrpiUbZy-2xw?pwd=ij72 æå–ç ï¼šij72) | é˜¿é‡Œäº‘ç›˜ï¼ˆéœ€è¦æ‰‹åŠ¨å‘å¿«ä¼ ï¼‰ |
-| ------------------------------------------------------------ | -------------------------- |
+Èç¹ûÄã¾õµÃ±¾ÏµÁĞÎÄÕÂÓĞÓÃ£¬»¶Ó­¹Ø×¢²©¿Í£¬µãÔŞºÍÊÕ²Ø£¬Ò²»¶Ó­ÔÚÆÀÂÛÇøÌÖÂÛ£º  
+_Èç¹ûÄã¾õµÃ±¾ÎÄ¶ÔÄãÓĞ°ïÖú_£¬»¶Ó­·ÃÎÊÎÒµÄ[°®·¢µç](https://afdian.net/a/renhai)Ö§³ÖÎÒ£¬»òÕß¶Ô´ËÎÄÕÂ½øĞĞÔŞÉÍ¡£
 
-æ–‡ä»¶ç»“æ„å¦‚ä¸‹å›¾ï¼š
-
-```text
-â”œâ”€â”€ Classify_Imagery_with_Python(ä¸æä¾›)
-â”œâ”€â”€ ODå›¾
-â”œâ”€â”€ Workflow
-â”œâ”€â”€ data1
-â”œâ”€â”€ data2
-â”œâ”€â”€ data3
-â”œâ”€â”€ data4
-â””â”€â”€ ç¬¬ä¸ƒæ¬¡äººå£æ™®æŸ¥æ•°æ®
-```
----
-
-å¦‚æœä½ è§‰å¾—æœ¬ç³»åˆ—æ–‡ç« æœ‰ç”¨ï¼Œæ¬¢è¿å…³æ³¨åšå®¢ï¼Œç‚¹èµå’Œæ”¶è—ï¼Œä¹Ÿæ¬¢è¿åœ¨è¯„è®ºåŒºè®¨è®ºï¼š
-*å¦‚æœä½ è§‰å¾—æœ¬æ–‡å¯¹ä½ æœ‰å¸®åŠ©*ï¼Œæ¬¢è¿è®¿é—®æˆ‘çš„[çˆ±å‘ç”µ](https://afdian.net/a/renhai)æ”¯æŒæˆ‘ï¼Œæˆ–è€…å¯¹æ­¤æ–‡ç« è¿›è¡Œèµèµã€‚
-
-[<img src="https://blog.renhai-lab.tech/upload/image-20240329175704662.png"
-     alt="donate"
-     height="80">](https://afdian.net/a/renhai)
+[<img src="https://blog.renhai-lab.tech/upload/image-20240329175704662.png"  
+     alt="donate"     height="80">](https://afdian.net/a/renhai)
 
 ---
-**å…¶ä»–å¹³å°è´¦å·ï¼š**
-[<img src="https://blog.renhai-lab.tech/upload/wechat-scan.png"
-     alt="donate"
-     height="80">](https://blog.renhai-lab.tech/upload/%E6%89%AB%E7%A0%81_%E6%90%9C%E7%B4%A2%E8%81%94%E5%90%88%E4%BC%A0%E6%92%AD%E6%A0%B7%E5%BC%8F-%E7%99%BD%E8%89%B2%E7%89%88.png)
 
-- [æˆ‘çš„çŸ¥ä¹](https://www.zhihu.com/people/Ing_ideas)
-- [æˆ‘çš„åšå®¢](https://blog.renhai-lab.tech/)
-- [æˆ‘çš„GITHUB](https://github.com/renhai-lab)
-- [æˆ‘çš„GITEE](https://gitee.com/renhai-lab)
+**ÆäËûÆ½Ì¨ÕËºÅ£º**  
+[<img src="https://blog.renhai-lab.tech/upload/wechat-scan.png"  
+     alt="donate"     height="80">](https://blog.renhai-lab.tech/upload/%E6%89%AB%E7%A0%81_%E6%90%9C%E7%B4%A2%E8%81%94%E5%90%88%E4%BC%A0%E6%92%AD%E6%A0%B7%E5%BC%8F-%E7%99%BD%E8%89%B2%E7%89%88.png)
+
+- [ÎÒµÄÖªºõ](https://www.zhihu.com/people/Ing_ideas)
+- [ÎÒµÄ²©¿Í](https://blog.renhai-lab.tech/)
+- [ÎÒµÄGITHUB](https://github.com/renhai-lab)
+- [ÎÒµÄGITEE](https://gitee.com/renhai-lab)
 - [RSS](https://blog.renhai-lab.tech/rss.xml)
 
-<img src="https://image-1315363329.cos.ap-shanghai.myqcloud.com/logo-white.jpg" alt="æ›´å¤šè´¦å·" style="zoom:50%;" />
+<img src="https://image-1315363329.cos.ap-shanghai.myqcloud.com/logo-white.jpg" alt="¸ü¶àÕËºÅ" style="zoom:50%;" />
