@@ -41,7 +41,7 @@
 #### Github仓库的资源太多，打包放在网盘：
 
 - [百度网盘](链接：https://pan.baidu.com/s/10acEcyXlQFFrpiUbZy-2xw?pwd=ij72 提取码：ij72)
-- 阿里云盘：关注公众号【renhai-lab】私信【Arcpy 教程资源】，收到后我会发送给你。
+- 阿里云盘：关注公众号【renhai-lab】私信【Arcpy教程资源】，收到后我会发送给你。
 
 
 ## 拓展资料
