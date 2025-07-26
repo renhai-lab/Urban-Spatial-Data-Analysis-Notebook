@@ -67,7 +67,8 @@
 
 **数据集全名：** Description for Electric Vehicle Data Release V0&Description for Urban Data Release V2
 
-**链接：** [https://www.cs.rutgers.edu/~dz220/data.html](https://www.cs.rutgers.edu/~dz220/data.html)
+
+**下载链接：** [https://www.cs.rutgers.edu/~dz220/data.html](https://www.cs.rutgers.edu/~dz220/data.html)
 
 **简介：** 罗格斯大学助理教授Desheng Zhang课题组电动出租车数据集，包括深圳市单日664辆出租车的1,155,654条GPS数据。
 
@@ -77,6 +78,8 @@
 ![[image-20231224164838405.png]]
 
 ![[image-20231224145322649.png]]
+
+
 
 **相关文章：** [【数据获取】深圳市手机信令数据下载与处理(包括ETC/公交卡/出租车轨迹等)](http://mp.weixin.qq.com/s?__biz=MzA3NTk0MTU3MA==&mid=2247525398&idx=1&sn=caa592607870f5ae1deeb4f1f84865af&chksm=9f6af7bba81d7eadd980ea6058ef7c288424956dfb765fbe4b7351f40ab0aa7793d25904357a&scene=21#wechat_redirect)
 

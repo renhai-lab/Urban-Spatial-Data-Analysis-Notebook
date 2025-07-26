@@ -1,0 +1,13 @@
+.venv
+arcgis_project/
+
+data/上海路网数据
+data/省份与市区县的数据
+data/上海路网数据.rar
+data/shanghai_roads_merged.gpkg
+
+路网聚合.qgz
+TODO.md
+
+image/province_cluster_regions_visualization/
+image/province_clusters_visualization/
