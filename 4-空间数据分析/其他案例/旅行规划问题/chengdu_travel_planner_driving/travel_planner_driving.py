@@ -20,22 +20,20 @@ class TravelPlanner:
 
     def __init__(self, mode: str = "driving"):
         config = configparser.ConfigParser()
-
-
-        self.api_key = config["baidu_map"]["api_key"]
+        
         self.base_url = "https://api.map.baidu.com"
         self.mode = mode
 
         # 从JSON文件加载地点
-        with open("locations.json", "r", encoding="utf-8") as f:
+        with open("chengdu_travel_planner_driving/cache/chengdu_locations.json", "r", encoding="utf-8") as f:
             self.locations = json.load(f)
 
         self.location_names = list(self.locations.keys())
         self.n = len(self.location_names)
 
         # 缓存机制：点对缓存，减少重复计算
-        self.cache_file = f"cache/chengdu_travel_time_cache_{self.mode}.json"
-        self.path_cache_file = f"cache/chengdu_travel_path_cache_{self.mode}.json"
+        self.cache_file = f"chengdu_travel_planner_driving/cache/chengdu_travel_time_cache_{self.mode}.json"
+        self.path_cache_file = f"chengdu_travel_planner_driving/cache/chengdu_travel_path_cache_{self.mode}.json"
         
         # 先初始化路径缓存，再计算距离矩阵
         self.path_cache = self._load_path_cache()
@@ -46,6 +44,8 @@ class TravelPlanner:
             if not os.path.exists("config.ini"):
                 raise FileNotFoundError("请先复制 config.ini.example 为 config.ini 并填写百度地图API key")
             config.read("config.ini")
+            self.api_key = config["baidu_map"]["api_key"]
+
 
     def _load_path_cache(self) -> dict:
         """加载路径缓存"""
@@ -738,7 +738,7 @@ def main():
 
     # 蚁群算法
     aco_path, aco_time = planner.ant_colony_optimization_tsp(
-        num_ants=50, iterations=100, alpha=1.0, beta=2.0, rho=0.5, q=100
+        num_ants=500, iterations=100, alpha=1.0, beta=2.0, rho=0.5, q=100
     )
     planner.print_route_details(aco_path, aco_time, "蚁群算法")
     planner.plot_route_on_map(aco_path, map_filename="route_map_aco.html")
