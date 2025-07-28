@@ -52,3 +52,18 @@ uv run chengdu_travel_planner_driving/travel_planner_driving.py```
 *   `route_map_nn.html`: **最近邻算法 (Nearest Neighbor)** - 一种简单的贪心策略。
 *   `route_map_ga.html`: **遗传算法 (Genetic Algorithm)** - 一种模拟生物进化的全局优化算法。
 *   `route_map_aco.html`: **蚁群算法 (Ant Colony Optimization)** - 模拟蚂蚁寻找食物路径的启发式算法。
+
+### **4.手动规划**
+
+支持手动规划路线，用于测试。
+
+```bash
+# 显示待规划的几个点
+uv run chengdu_travel_planner_driving/plot_locations.py```
+
+查看all_locations_map.html
+
+```bash
+uv run chengdu_travel_planner_driving/manual_route_time.py```
+
+控制台查看时间，manual_route_map.html查看地图

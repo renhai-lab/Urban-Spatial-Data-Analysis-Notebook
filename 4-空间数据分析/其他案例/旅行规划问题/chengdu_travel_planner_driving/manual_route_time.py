@@ -1,10 +1,106 @@
 import json
+import folium
+import eviltransform
 from travel_planner_driving import TravelPlanner
+
+
+def plot_manual_route(waypoints, locations, path_cache, map_filename="manual_route_map.html"):
+    """绘制手动输入的路线图"""
+    print(f"\n正在生成路线地图...")
+    
+    # 获取景点坐标顺序
+    coords_latlng = []
+    for waypoint in waypoints:
+        lon, lat = locations[waypoint] # TODO locations是经纬度反的
+        coords_latlng.append((lat, lon))
+    
+    # 转换为WGS84坐标系
+    coords_latlng_wgs84 = [eviltransform.bd2wgs(lat, lon) for lat, lon in coords_latlng]
+    
+    # 以第一个景点为中心，自动调整缩放
+    m = folium.Map(location=coords_latlng_wgs84[0], zoom_start=12)
+    
+    # 收集所有真实路径坐标用于调整地图边界
+    all_route_coords = coords_latlng_wgs84.copy()
+    
+    # 添加景点标记和名称
+    for idx, (lat, lon) in enumerate(coords_latlng_wgs84):
+        marker = folium.Marker(
+            location=(lat, lon),
+            popup=f"<b>{idx+1}. {waypoints[idx]}</b>",
+            icon=folium.Icon(
+                color=(
+                    "green"
+                    if idx == 0
+                    else "red" if idx == len(coords_latlng_wgs84) - 1 else "blue"
+                ),
+                icon="info-sign",
+            ),
+        )
+        # 添加永久显示的标签
+        folium.Tooltip(
+            f"{idx+1}. {waypoints[idx]}",
+            permanent=True,
+            direction="right",
+            offset=(10, 0),
+            style="color: navy; font-weight: bold;",
+        ).add_to(marker)
+        marker.add_to(m)
+    
+    # 绘制真实车行路线
+    total_path_points = 0
+    for i in range(len(waypoints) - 1):
+        origin = waypoints[i]
+        destination = waypoints[i + 1]
+        key = f"{origin}|{destination}"
+        
+        if key in path_cache and path_cache[key]:
+            # 使用真实路径
+            real_path_coords = path_cache[key]
+            # 转换为WGS84坐标系
+            real_path_wgs84 = [eviltransform.bd2wgs(lat, lon) for lat, lon in real_path_coords]
+            all_route_coords.extend(real_path_wgs84)
+            
+            # 绘制这段路径
+            folium.PolyLine(
+                real_path_wgs84, 
+                color="red", 
+                weight=3, 
+                opacity=0.8,
+                popup=f"{origin} → {destination}"
+            ).add_to(m)
+            
+            total_path_points += len(real_path_coords)
+            print(f"绘制真实路径: {origin} → {destination} ({len(real_path_coords)}个坐标点)")
+        else:
+            # 降级到直线连接
+            start_coord = coords_latlng_wgs84[i]
+            end_coord = coords_latlng_wgs84[i + 1]
+            folium.PolyLine(
+                [start_coord, end_coord], 
+                color="blue", 
+                weight=2, 
+                opacity=0.6,
+                popup=f"{origin} → {destination} (直线)"
+            ).add_to(m)
+            print(f"使用直线连接: {origin} → {destination} (缺少真实路径数据)")
+    
+    # 调整地图边界以包含所有路径点
+    if all_route_coords:
+        m.fit_bounds(all_route_coords)
+    
+    # 保存为HTML
+    m.save(map_filename)
+    print(f"已生成路线地图: {map_filename} (共使用{total_path_points}个真实路径点)")
+    if total_path_points == 0:
+        print("⚠️ 未找到真实路径数据，建议重新运行以获取路径信息")
+    else:
+        print(f"✅ 地图已保存，请打开 {map_filename} 查看路线")
 
 
 def main():
     # 加载地点
-    with open("cache/chengdu_locations.json", "r", encoding="utf-8") as f:
+    with open("chengdu_travel_planner_driving/cache/chengdu_locations.json", "r", encoding="utf-8") as f:
         locations = json.load(f)
     location_names = list(locations.keys())
     print("可用景点：")
@@ -31,7 +127,7 @@ def main():
         return
     # 优先查缓存
     try:
-        with open("travel_time_cache_driving.json", "r", encoding="utf-8") as f:
+        with open("chengdu_travel_planner_driving/cache/chengdu_travel_time_cache_driving.json", "r", encoding="utf-8") as f:
             cache = json.load(f)
     except Exception:
         cache = {}
@@ -48,6 +144,9 @@ def main():
         print(f"{a} → {b}: {t:.1f} 分钟")
         total_time += t
     print(f"\n总行程时间：{total_time:.1f} 分钟（{total_time/60:.2f} 小时）")
+    
+    # 绘制路线图
+    plot_manual_route(waypoints, locations, planner.path_cache)
 
 
 if __name__ == "__main__":

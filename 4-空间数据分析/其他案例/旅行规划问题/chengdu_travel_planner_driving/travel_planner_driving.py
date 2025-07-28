@@ -15,6 +15,7 @@ import json
 import configparser
 
 import folium
+import shutil
 
 class TravelPlanner:
 
@@ -23,6 +24,20 @@ class TravelPlanner:
         
         self.base_url = "https://api.map.baidu.com"
         self.mode = mode
+
+        # 尝试读取baidu api key
+        if not os.path.exists("config.ini"):
+            print("未找到 config.ini 文件。")
+            try:
+                shutil.copy("config.ini.example", "config.ini")
+                print("已自动从 config.ini.example 复制生成 config.ini。")
+                print("请在 config.ini 文件中填写您的百度地图API key后，重新运行程序。")
+                exit() # 退出程序，让用户填写key
+            except Exception as e:
+                print(f"自动复制文件失败: {e}")
+
+        config.read("config.ini")
+        self.api_key = config["baidu_map"]["api_key"]
 
         # 从JSON文件加载地点
         with open("chengdu_travel_planner_driving/cache/chengdu_locations.json", "r", encoding="utf-8") as f:
@@ -38,13 +53,6 @@ class TravelPlanner:
         # 先初始化路径缓存，再计算距离矩阵
         self.path_cache = self._load_path_cache()
         self.distance_matrix = self._load_or_calc_travel_time_matrix_optimized()
-        
-        # 在缓存不存在的情况下 尝试读取baiduapi key
-        if not os.path.exists(self.cache_file):
-            if not os.path.exists("config.ini"):
-                raise FileNotFoundError("请先复制 config.ini.example 为 config.ini 并填写百度地图API key")
-            config.read("config.ini")
-            self.api_key = config["baidu_map"]["api_key"]
 
 
     def _load_path_cache(self) -> dict:
@@ -130,7 +138,7 @@ class TravelPlanner:
                 "origin": f"{self.locations[origin][1]},{self.locations[origin][0]}",  # 纬度,经度
                 "destination": f"{self.locations[destination][1]},{self.locations[destination][0]}",
                 "ak": self.api_key,
-                "tactics": 2,  # 距离最短（只返回一条路线，不考虑限行和路况，距离最短且稳定，用于估价场景）
+                # "tactics": 2,  # 距离最短（只返回一条路线，不考虑限行和路况，距离最短且稳定，用于估价场景）
             }
             # 公交模式需要指定城市
             if self.mode == "transit":
