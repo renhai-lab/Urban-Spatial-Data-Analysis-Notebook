@@ -1,54 +1,79 @@
 """
 成都一日游智能规划系统 - 驾车版 - demo
-使用百度地图API获取真实驾车时间
+使用高德地图API获取真实驾车时间
 """
 import os
 import math
 import time
 import random
+import argparse
+from pathlib import Path
 
 import eviltransform
 import requests
 from typing import List, Tuple
 
 import json
-import configparser
+from dotenv import load_dotenv
 
 import folium
 import shutil
 
 class TravelPlanner:
-
     def __init__(self, mode: str = "driving"):
-        config = configparser.ConfigParser()
-        
-        self.base_url = "https://api.map.baidu.com"
+        # 获取脚本所在目录
+        self.script_dir = Path(__file__).parent
+        self.base_url = "https://restapi.amap.com"
         self.mode = mode
 
-        # 尝试读取baidu api key
-        if not os.path.exists("config.ini"):
-            print("未找到 config.ini 文件。")
-            try:
-                shutil.copy("config.ini.example", "config.ini")
-                print("已自动从 config.ini.example 复制生成 config.ini。")
-                print("请在 config.ini 文件中填写您的百度地图API key后，重新运行程序。")
-                exit() # 退出程序，让用户填写key
-            except Exception as e:
-                print(f"自动复制文件失败: {e}")
+        # 从.env文件加载环境变量
+        
+        env_file = self.script_dir.parent / ".env"
+        env_example = self.script_dir.parent / ".env.example"
 
-        config.read("config.ini")
-        self.api_key = config["baidu_map"]["api_key"]
+        # 检查.env文件是否存在，如果不存在则从.env.example复制
+        if not env_file.exists():
+            print("未找到 .env 文件。")
+            if env_example.exists():
+                try:
+                    shutil.copy(env_example, env_file)
+                    print("已自动从 .env.example 复制生成 .env 文件。")
+                    print("请在 .env 文件中填写您的 AMAP_API_KEY 后，重新运行程序。")
+                    exit()
+                except Exception as e:
+                    print(f"自动复制文件失败: {e}")
+                    exit()
+            else:
+                print("也未找到 .env.example 文件。请创建一个 .env 文件并设置 AMAP_API_KEY。")
+                exit()
+
+        load_dotenv(dotenv_path=env_file)
+        self.api_key = os.getenv("AMAP_API_KEY")
+
+        if not self.api_key:
+            print("在 .env 文件中未找到或未设置 AMAP_API_KEY。")
+            print("请确保 .env 文件中有 'AMAP_API_KEY=your_key_here' 这一行。")
+            exit()
+
+        # 缓存和数据目录路径
+        self.cache_dir = self.script_dir / "cache"
+        self.data_dir = self.script_dir / "data"
+        
+        # 确保目录存在
+        self.cache_dir.mkdir(exist_ok=True)
+        self.data_dir.mkdir(exist_ok=True)
 
         # 从JSON文件加载地点
-        with open("chengdu_travel_planner_driving/cache/chengdu_locations.json", "r", encoding="utf-8") as f:
+        locations_file = self.cache_dir / "chengdu_locations_gcj02.json"
+        with open(locations_file, "r", encoding="utf-8") as f:
             self.locations = json.load(f)
 
         self.location_names = list(self.locations.keys())
         self.n = len(self.location_names)
 
         # 缓存机制：点对缓存，减少重复计算
-        self.cache_file = f"chengdu_travel_planner_driving/cache/chengdu_travel_time_cache_{self.mode}.json"
-        self.path_cache_file = f"chengdu_travel_planner_driving/cache/chengdu_travel_path_cache_{self.mode}.json"
+        self.cache_file = self.cache_dir / f"chengdu_travel_time_cache_{self.mode}.json"
+        self.path_cache_file = self.cache_dir / f"chengdu_travel_path_cache_{self.mode}.json"
         
         # 先初始化路径缓存，再计算距离矩阵
         self.path_cache = self._load_path_cache()
@@ -57,7 +82,7 @@ class TravelPlanner:
 
     def _load_path_cache(self) -> dict:
         """加载路径缓存"""
-        if os.path.exists(self.path_cache_file):
+        if self.path_cache_file.exists():
             try:
                 with open(self.path_cache_file, "r", encoding="utf-8") as f:
                     return json.load(f)
@@ -68,10 +93,9 @@ class TravelPlanner:
     def _load_or_calc_travel_time_matrix_optimized(self) -> list:
         """优化：点对缓存，动态补全，减少重复计算"""
 
-
         # 加载点对缓存
         cache = {}
-        if os.path.exists(self.cache_file):
+        if self.cache_file.exists():
             try:
                 with open(self.cache_file, "r", encoding="utf-8") as f:
                     cache = json.load(f)
@@ -122,57 +146,63 @@ class TravelPlanner:
         return matrix
 
     def _get_travel_time(self, origin: str, destination: str) -> float:
-        """使用百度地图API获取两点间的出行时间（分钟）"""
+        """使用高德地图API获取两点间的出行时间（分钟）"""
         try:
-            # 根据模式选择不同API
-            url_map = {
-                "driving": "/direction/v2/driving", # TODO 支持18个以内的途径点，可以测试一下直接让百度api规划的路程是怎样的，但是必须要指定途径点顺序，不符合项目要求。目前我们还无法确定途径点顺序。
-                "walking": "/direction/v2/walking",
-                "transit": "/direction/v2/transit",
-            }
-            api_url = (
-                f"{self.base_url}{url_map.get(self.mode, '/direction/v2/driving')}"
-            )
+            # 高德地图API URL
+            if self.mode == "driving":
+                api_url = f"{self.base_url}/v3/direction/driving"
+            elif self.mode == "walking":
+                api_url = f"{self.base_url}/v3/direction/walking"
+            elif self.mode == "transit":
+                api_url = f"{self.base_url}/v3/direction/transit/integrated"
+            else:
+                api_url = f"{self.base_url}/v3/direction/driving"
 
             params = {
-                "origin": f"{self.locations[origin][1]},{self.locations[origin][0]}",  # 纬度,经度
-                "destination": f"{self.locations[destination][1]},{self.locations[destination][0]}",
-                "ak": self.api_key,
-                # "tactics": 2,  # 距离最短（只返回一条路线，不考虑限行和路况，距离最短且稳定，用于估价场景）
+                "origin": f"{self.locations[origin][0]},{self.locations[origin][1]}",  # 经度,纬度
+                "destination": f"{self.locations[destination][0]},{self.locations[destination][1]}",
+                "key": self.api_key,
+                "strategy": 10,  # 10，返回结果会躲避拥堵，路程较短，尽量缩短时间，与高德地图的默认策略也就是不进行任何勾选一致
+                "output": "json"
             }
+            
             # 公交模式需要指定城市
             if self.mode == "transit":
-                params["region"] = "成都市" #　TODO: 这里可以改为动态获取城市名
+                params["city"] = "成都"
+                params["cityd"] = "成都"
 
             response = requests.get(api_url, params=params, timeout=10)
             data = response.json()
 
-            if data.get("status") == 0 and "result" in data:
-                # 不同模式下，API返回的耗时字段不同
+            if data.get("status") == "1" and "route" in data:
+                # 不同模式下，API返回的结构不同
                 if self.mode in ["driving", "walking"]:
-                    duration = data["result"]["routes"][0]["duration"]
-                    # 提取真实路径坐标
-                    self._extract_and_save_path(origin, destination, data["result"]["routes"][0])
+                    if "paths" in data["route"] and len(data["route"]["paths"]) > 0:
+                        duration = int(data["route"]["paths"][0]["duration"])
+                        # 提取真实路径坐标
+                        self._extract_and_save_path_amap(origin, destination, data["route"]["paths"][0])
+                    else:
+                        return self._fallback_distance(origin, destination)
                 elif self.mode == "transit":
-                    raise NotImplementedError("公交路线的路径提取暂未测试")
-                    duration = data["result"]["routes"][0].get(
-                        "duration", 0
-                    )  # 公交可能存在查不到路线的情况
-                    # 公交路线的路径提取较复杂，暂时跳过
+                    if "transits" in data["route"] and len(data["route"]["transits"]) > 0:
+                        duration = int(data["route"]["transits"][0]["duration"])
+                        # 公交路线的路径提取较复杂，暂时跳过
+                    else:
+                        return self._fallback_distance(origin, destination)
                 else:
                     duration = 0
 
                 return duration / 60  # 转换为分钟
             else:
-                print(f"API错误: {data.get('message', '未知错误')}")
+                print(f"API错误: {data.get('info', '未知错误')}")
                 return self._fallback_distance(origin, destination)
 
         except Exception as e:
             print(f"获取出行时间失败: {e}")
             return self._fallback_distance(origin, destination)
 
-    def _extract_and_save_path(self, origin: str, destination: str, route_data: dict):
-        """提取并保存真实路径坐标"""
+    def _extract_and_save_path_amap(self, origin: str, destination: str, path_data: dict):
+        """提取并保存高德地图API返回的真实路径坐标"""
         try:
             # 确保path_cache已初始化
             if not hasattr(self, 'path_cache'):
@@ -181,13 +211,13 @@ class TravelPlanner:
             key = f"{origin}|{destination}"
             path_coords = []
             
-            # 提取steps中的path信息
-            if "steps" in route_data:
-                for step in route_data["steps"]:
-                    if "path" in step:
-                        # path格式: "116.339646,40.010519;116.340006,40.010546;..."
-                        path_str = step["path"]
-                        coords = path_str.split(";")
+            # 高德地图API返回的路径在steps中
+            if "steps" in path_data:
+                for step in path_data["steps"]:
+                    if "polyline" in step:
+                        # polyline格式: "116.339646,40.010519;116.340006,40.010546;..."
+                        polyline_str = step["polyline"]
+                        coords = polyline_str.split(";")
                         for coord in coords:
                             if coord.strip():
                                 lon, lat = map(float, coord.split(","))
@@ -644,8 +674,8 @@ class TravelPlanner:
         coords = [self.locations[self.location_names[i]] for i in path]
         # folium要求坐标为(纬度, 经度)
         coords_latlng = [(latlng[1], latlng[0]) for latlng in coords]
-        # 转换为WGS84坐标系
-        coords_latlng = [eviltransform.bd2wgs(lat, lon) for lat, lon in coords_latlng]
+        # 转换为WGS84坐标系（从GCJ02转换）
+        coords_latlng = [eviltransform.gcj2wgs(lat, lon) for lat, lon in coords_latlng]
 
         # 以第一个景点为中心，自动调整缩放
         m = folium.Map(location=coords_latlng[0], zoom_start=12)
@@ -687,8 +717,8 @@ class TravelPlanner:
             if key in self.path_cache and self.path_cache[key]:
                 # 使用真实路径
                 real_path_coords = self.path_cache[key]
-                # 转换为WGS84坐标系
-                real_path_wgs84 = [eviltransform.bd2wgs(lat, lon) for lat, lon in real_path_coords]
+                # 转换为WGS84坐标系（从GCJ02转换）
+                real_path_wgs84 = [eviltransform.gcj2wgs(lat, lon) for lat, lon in real_path_coords]
                 all_route_coords.extend(real_path_wgs84)
                 
                 # 绘制这段路径
@@ -720,22 +750,308 @@ class TravelPlanner:
             m.fit_bounds(all_route_coords)
 
         # 保存为HTML
-        m.save(map_filename)
-        print(f"已生成路线地图: {map_filename} (共使用{total_path_points}个真实路径点)")
+        output_dir = self.data_dir / "maps"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        m.save(output_dir / map_filename)
+        print(f"已生成路线地图: {output_dir / map_filename} (共使用{total_path_points}个真实路径点)")
         if total_path_points == 0:
             print("⚠️ 未找到真实路径数据，建议重新运行以获取路径信息")
 
+    def generate_route_geojson(self, path: list, algorithm_name: str = "算法", convert_to_wgs84: bool = True) -> dict:
+        """生成路线的GeoJSON数据，用于前端展示
+        
+        Args:
+            path: 路径列表
+            algorithm_name: 算法名称
+            convert_to_wgs84: 是否转换为WGS84坐标系，默认True。False则保持GCJ02坐标系
+        """
+        
+        # 获取景点坐标顺序 - 原始数据格式是 [经度, 纬度] (GCJ02)
+        coords = [self.locations[self.location_names[i]] for i in path]
+        
+        # 处理坐标转换
+        final_coords = []
+        if convert_to_wgs84:
+            # 转换为WGS84坐标系 - eviltransform.gcj2wgs(lat, lon) 返回 (lat, lon)
+            for lon_gcj02, lat_gcj02 in coords:
+                wgs_lat, wgs_lon = eviltransform.gcj2wgs(lat_gcj02, lon_gcj02)
+                final_coords.append([wgs_lat, wgs_lon])  # [纬度, 经度]
+            coord_system = "WGS84"
+        else:
+            # 保持GCJ02坐标系
+            for lon_gcj02, lat_gcj02 in coords:
+                final_coords.append([lat_gcj02, lon_gcj02])  # [纬度, 经度]
+            coord_system = "GCJ02"
+        
+        # 创建GeoJSON结构
+        geojson = {
+            "type": "FeatureCollection",
+            "features": []
+        }
+        
+        # 添加景点标记 (Points)
+        for idx, (final_lat, final_lon) in enumerate(final_coords):
+            point_feature = {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [final_lon, final_lat]  # GeoJSON格式：[经度, 纬度]
+                },
+                "properties": {
+                    "id": idx,
+                    "name": self.location_names[path[idx]],
+                    "order": idx + 1,
+                    "type": "start" if idx == 0 else "end" if idx == len(final_coords) - 1 else "waypoint",
+                    "description": f"第{idx+1}站: {self.location_names[path[idx]]}",
+                    "travel_time_from_previous": 0 if idx == 0 else self.distance_matrix[path[idx-1]][path[idx]],
+                    "coordinate_system": coord_system
+                }
+            }
+            geojson["features"].append(point_feature)
+        
+        # 添加路线 (LineStrings)
+        for i in range(len(path) - 1):
+            origin = self.location_names[path[i]]
+            destination = self.location_names[path[i + 1]]
+            key = f"{origin}|{destination}"
+            
+            # 尝试使用真实路径
+            if key in self.path_cache and self.path_cache[key]:
+                # 使用真实路径坐标 - path_cache中存储的是 [纬度, 经度] (GCJ02)
+                real_path_coords = self.path_cache[key]
+                
+                if convert_to_wgs84:
+                    # 转换为WGS84坐标系
+                    real_path_converted = [eviltransform.gcj2wgs(lat_gcj02, lon_gcj02) for lat_gcj02, lon_gcj02 in real_path_coords]
+                    # 转换为GeoJSON格式 [经度, 纬度]
+                    linestring_coords = [[conv_lon, conv_lat] for conv_lat, conv_lon in real_path_converted]
+                else:
+                    # 保持GCJ02坐标系，转换为GeoJSON格式 [经度, 纬度]
+                    linestring_coords = [[lon_gcj02, lat_gcj02] for lat_gcj02, lon_gcj02 in real_path_coords]
+                
+                route_type = "real_path"
+            else:
+                # 使用直线连接
+                start_coord = final_coords[i]  # [纬度, 经度]
+                end_coord = final_coords[i + 1]  # [纬度, 经度]
+                # 转换为GeoJSON格式 [经度, 纬度]
+                linestring_coords = [[start_coord[1], start_coord[0]], [end_coord[1], end_coord[0]]]
+                route_type = "straight_line"
+            
+            line_feature = {
+                "type": "Feature",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": linestring_coords
+                },
+                "properties": {
+                    "from": origin,
+                    "to": destination,
+                    "from_order": i + 1,
+                    "to_order": i + 2,
+                    "travel_time": self.distance_matrix[path[i]][path[i + 1]],
+                    "route_type": route_type,
+                    "segment_id": i,
+                    "description": f"{origin} → {destination} ({self.distance_matrix[path[i]][path[i + 1]]:.1f}分钟)",
+                    "coordinate_system": coord_system
+                }
+            }
+            geojson["features"].append(line_feature)
+        
+        # 添加路线总体信息
+        total_time = sum(self.distance_matrix[path[i]][path[i + 1]] for i in range(len(path) - 1))
+        geojson["metadata"] = {
+            "algorithm": algorithm_name,
+            "total_time_minutes": total_time,
+            "total_time_hours": total_time / 60,
+            "total_locations": len(path),
+            "route_summary": [self.location_names[i] for i in path],
+            "coordinate_system": coord_system,
+            "bounds": self._calculate_bounds(final_coords)
+        }
+        
+        return geojson
+    
+    def _calculate_bounds(self, coords: list) -> dict:
+        """计算坐标边界
+        
+        Args:
+            coords: 坐标列表，格式为 [[纬度, 经度], ...]
+        """
+        if not coords:
+            return {}
+        
+        lats = [coord[0] for coord in coords]
+        lons = [coord[1] for coord in coords]
+        
+        return {
+            "north": max(lats),
+            "south": min(lats),
+            "east": max(lons),
+            "west": min(lons),
+            "center": [(max(lats) + min(lats)) / 2, (max(lons) + min(lons)) / 2]
+        }
+    
+    def save_route_geojson(self, path: list, algorithm_name: str = "算法", filename: str = None, convert_to_wgs84: bool = True):
+        """保存路线GeoJSON到data文件夹
+        
+        Args:
+            path: 路径列表
+            algorithm_name: 算法名称
+            filename: 文件名，如果为None则自动生成
+            convert_to_wgs84: 是否转换为WGS84坐标系，默认True。False则保持GCJ02坐标系
+        """
+        if filename is None:
+            coord_suffix = "wgs84" if convert_to_wgs84 else "gcj02"
+            safe_algorithm_name = algorithm_name.lower().replace(' ', '_').replace('算法', 'algorithm')
+            filename = f"route_{safe_algorithm_name}_{coord_suffix}.geojson"
+        
+        # 确保文件保存到data文件夹
+        if isinstance(filename, str):
+            filename = Path(filename)
+        
+        if not filename.is_absolute() and filename.parts[0] != "data":
+            file_path = self.data_dir / filename.name
+        else:
+            file_path = self.data_dir / filename.name if filename.parts[0] == "data" else filename
+        
+        geojson_data = self.generate_route_geojson(path, algorithm_name, convert_to_wgs84=convert_to_wgs84)
+        
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(geojson_data, f, ensure_ascii=False, indent=2)
+        
+        coord_system = "WGS84" if convert_to_wgs84 else "GCJ02"
+        print(f"已生成GeoJSON文件: {file_path} ({coord_system}坐标系)")
+        return geojson_data
+    
+    def generate_locations_geojson(self, convert_to_wgs84: bool = True) -> dict:
+        """生成所有景点位置的GeoJSON数据
+        
+        Args:
+            convert_to_wgs84: 是否转换为WGS84坐标系，默认True。False则保持GCJ02坐标系
+        """
+        
+        geojson = {
+            "type": "FeatureCollection",
+            "features": []
+        }
+        
+        # 转换所有景点坐标并生成GeoJSON
+        for idx, (name, coords) in enumerate(self.locations.items()):
+            lon, lat = coords  # 原始数据格式是 [经度, 纬度] (GCJ02)
+            
+            if convert_to_wgs84:
+                # 转换为WGS84坐标系
+                wgs_lat, wgs_lon = eviltransform.gcj2wgs(lat, lon)
+                final_coords = [wgs_lon, wgs_lat]  # GeoJSON格式：[经度, 纬度]
+                coord_system = "WGS84"
+            else:
+                # 保持GCJ02坐标系
+                final_coords = [lon, lat]  # GeoJSON格式：[经度, 纬度]
+                coord_system = "GCJ02"
+            
+            point_feature = {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": final_coords
+                },
+                "properties": {
+                    "id": idx,
+                    "name": name,
+                    "description": f"{name}",
+                    "coordinate_system": coord_system
+                }
+            }
+            geojson["features"].append(point_feature)
+        
+        # 计算边界
+        coords_for_bounds = []
+        for name, coords in self.locations.items():
+            lon, lat = coords
+            if convert_to_wgs84:
+                wgs_lat, wgs_lon = eviltransform.gcj2wgs(lat, lon)
+                coords_for_bounds.append([wgs_lat, wgs_lon])  # [纬度, 经度]
+            else:
+                coords_for_bounds.append([lat, lon])  # [纬度, 经度]
+        
+        geojson["metadata"] = {
+            "total_locations": len(self.locations),
+            "coordinate_system": coord_system,
+            "bounds": self._calculate_bounds(coords_for_bounds),
+            "description": f"成都旅游景点位置数据 ({coord_system}坐标系)"
+        }
+        
+        return geojson
+    
+    def save_locations_geojson(self, filename: str = None, convert_to_wgs84: bool = True):
+        """保存景点位置GeoJSON到data文件夹
+        
+        Args:
+            filename: 文件名，如果为None则自动生成
+            convert_to_wgs84: 是否转换为WGS84坐标系，默认True。False则保持GCJ02坐标系
+        """
+        if filename is None:
+            coord_suffix = "wgs84" if convert_to_wgs84 else "gcj02"
+            filename = f"chengdu_locations_{coord_suffix}.geojson"
+        
+        # 确保文件保存到data文件夹
+        if isinstance(filename, str):
+            filename = Path(filename)
+        
+        if not filename.is_absolute() and filename.parts[0] != "data":
+            file_path = self.data_dir / filename.name
+        else:
+            file_path = self.data_dir / filename.name if filename.parts[0] == "data" else filename
+            
+        geojson_data = self.generate_locations_geojson(convert_to_wgs84=convert_to_wgs84)
+        
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(geojson_data, f, ensure_ascii=False, indent=2)
+        
+        coord_system = "WGS84" if convert_to_wgs84 else "GCJ02"
+        print(f"已生成景点位置GeoJSON文件: {file_path} ({coord_system}坐标系)")
+        return geojson_data
+
 
 def main():
+    # 解析命令行参数
+    parser = argparse.ArgumentParser(description="成都一日游智能规划系统 - 驾车版")
+    parser.add_argument(
+        "--generate-geojson", 
+        action="store_true", 
+        help="生成GeoJSON文件用于前端展示"
+    )
+    parser.add_argument(
+        "--coordinate-system",
+        choices=["wgs84", "gcj02", "both"],
+        default="wgs84",
+        help="GeoJSON坐标系选择: wgs84(默认,国际标准), gcj02(高德/国内标准), both(生成两种)"
+    )
+
+    args = parser.parse_args()
+    
     print("🚗 成都一日游智能规划系统 - 驾车版")
     print("=" * 50)
 
     planner = TravelPlanner()
+    
+    # 生成景点位置GeoJSON（如果启用）
+    if args.generate_geojson:
+        if args.coordinate_system in ["wgs84", "both"]:
+            planner.save_locations_geojson(convert_to_wgs84=True)
+        if args.coordinate_system in ["gcj02", "both"]:
+            planner.save_locations_geojson(convert_to_wgs84=False)
 
     # 最近邻算法
     nn_path, nn_time = planner.nearest_neighbor_tsp()
     planner.print_route_details(nn_path, nn_time, "最近邻算法")
     planner.plot_route_on_map(nn_path, map_filename="route_map_nn.html")
+    if args.generate_geojson:
+        if args.coordinate_system in ["wgs84", "both"]:
+            planner.save_route_geojson(nn_path, "nn", convert_to_wgs84=True)
+        if args.coordinate_system in ["gcj02", "both"]:
+            planner.save_route_geojson(nn_path, "nn", convert_to_wgs84=False)
 
     # 遗传算法
     ga_path, ga_time = planner.genetic_algorithm_tsp(
@@ -743,6 +1059,11 @@ def main():
     )
     planner.print_route_details(ga_path, ga_time, "遗传算法")
     planner.plot_route_on_map(ga_path, map_filename="route_map_ga.html")
+    if args.generate_geojson:
+        if args.coordinate_system in ["wgs84", "both"]:
+            planner.save_route_geojson(ga_path, "ga", convert_to_wgs84=True)
+        if args.coordinate_system in ["gcj02", "both"]:
+            planner.save_route_geojson(ga_path, "ga", convert_to_wgs84=False)
 
     # 蚁群算法
     aco_path, aco_time = planner.ant_colony_optimization_tsp(
@@ -750,6 +1071,11 @@ def main():
     )
     planner.print_route_details(aco_path, aco_time, "蚁群算法")
     planner.plot_route_on_map(aco_path, map_filename="route_map_aco.html")
+    if args.generate_geojson:
+        if args.coordinate_system in ["wgs84", "both"]:
+            planner.save_route_geojson(aco_path, "ant_colony", convert_to_wgs84=True)
+        if args.coordinate_system in ["gcj02", "both"]:
+            planner.save_route_geojson(aco_path, "ant_colony", convert_to_wgs84=False)
 
     # 算法比较
     print(f"\n=== 算法比较 ===")
@@ -768,6 +1094,17 @@ def main():
     if worst_time > best_time:
         improvement = ((worst_time - best_time) / worst_time) * 100
         print(f"相比最差算法优化了 {improvement:.1f}%")
+    
+    # 提示GeoJSON生成
+    if args.generate_geojson:
+        coord_systems = {"wgs84": "WGS84", "gcj02": "GCJ02", "both": "WGS84和GCJ02"}
+        print(f"\n📄 已生成GeoJSON文件到data文件夹 ({coord_systems[args.coordinate_system]}坐标系)")
+    else:
+        print(f"\n💡 提示: 使用 --generate-geojson 参数可生成用于前端展示的GeoJSON文件")
+        print(f"   基本用法: python travel_planner_driving.py --generate-geojson")
+        print(f"   指定坐标系: python travel_planner_driving.py --generate-geojson --coordinate-system wgs84")
+        print(f"   坐标系选项: wgs84(国际标准), gcj02(高德/国内标准), both(生成两种)")
+        print(f"   测试脚本: python test_coordinate_systems.py")
 
 
 if __name__ == "__main__":

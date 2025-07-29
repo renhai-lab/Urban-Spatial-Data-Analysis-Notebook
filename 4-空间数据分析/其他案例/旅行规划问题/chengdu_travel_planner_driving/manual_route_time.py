@@ -1,6 +1,7 @@
 import json
 import folium
 import eviltransform
+from pathlib import Path
 from travel_planner_driving import TravelPlanner
 
 
@@ -8,14 +9,17 @@ def plot_manual_route(waypoints, locations, path_cache, map_filename="manual_rou
     """绘制手动输入的路线图"""
     print(f"\n正在生成路线地图...")
     
+    # 获取脚本所在目录
+    script_dir = Path(__file__).parent
+    
     # 获取景点坐标顺序
     coords_latlng = []
     for waypoint in waypoints:
-        lon, lat = locations[waypoint] # TODO locations是经纬度反的
+        lon, lat = locations[waypoint] # locations现在是GCJ02坐标
         coords_latlng.append((lat, lon))
     
     # 转换为WGS84坐标系
-    coords_latlng_wgs84 = [eviltransform.bd2wgs(lat, lon) for lat, lon in coords_latlng]
+    coords_latlng_wgs84 = [eviltransform.gcj2wgs(lat, lon) for lat, lon in coords_latlng]
     
     # 以第一个景点为中心，自动调整缩放
     m = folium.Map(location=coords_latlng_wgs84[0], zoom_start=12)
@@ -57,8 +61,8 @@ def plot_manual_route(waypoints, locations, path_cache, map_filename="manual_rou
         if key in path_cache and path_cache[key]:
             # 使用真实路径
             real_path_coords = path_cache[key]
-            # 转换为WGS84坐标系
-            real_path_wgs84 = [eviltransform.bd2wgs(lat, lon) for lat, lon in real_path_coords]
+            # 转换为WGS84坐标系（现在路径是GCJ02坐标）
+            real_path_wgs84 = [eviltransform.gcj2wgs(lat, lon) for lat, lon in real_path_coords]
             all_route_coords.extend(real_path_wgs84)
             
             # 绘制这段路径
@@ -90,17 +94,22 @@ def plot_manual_route(waypoints, locations, path_cache, map_filename="manual_rou
         m.fit_bounds(all_route_coords)
     
     # 保存为HTML
-    m.save(map_filename)
-    print(f"已生成路线地图: {map_filename} (共使用{total_path_points}个真实路径点)")
+    output_path = script_dir.parent / "data/map" / map_filename
+    m.save(output_path)
+    print(f"已生成路线地图: {output_path} (共使用{total_path_points}个真实路径点)")
     if total_path_points == 0:
         print("⚠️ 未找到真实路径数据，建议重新运行以获取路径信息")
     else:
-        print(f"✅ 地图已保存，请打开 {map_filename} 查看路线")
+        print(f"✅ 地图已保存，请打开 {output_path} 查看路线")
 
 
 def main():
+    # 获取脚本所在目录
+    script_dir = Path(__file__).parent
+    
     # 加载地点
-    with open("chengdu_travel_planner_driving/cache/chengdu_locations.json", "r", encoding="utf-8") as f:
+    locations_file = script_dir / "cache" / "chengdu_locations_gcj02.json"
+    with open(locations_file, "r", encoding="utf-8") as f:
         locations = json.load(f)
     location_names = list(locations.keys())
     print("可用景点：")
@@ -127,7 +136,8 @@ def main():
         return
     # 优先查缓存
     try:
-        with open("chengdu_travel_planner_driving/cache/chengdu_travel_time_cache_driving.json", "r", encoding="utf-8") as f:
+        cache_file = script_dir / "cache" / "chengdu_travel_time_cache_driving.json"
+        with open(cache_file, "r", encoding="utf-8") as f:
             cache = json.load(f)
     except Exception:
         cache = {}

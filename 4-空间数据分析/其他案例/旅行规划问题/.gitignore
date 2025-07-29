@@ -1,3 +1,5 @@
 config.ini
 ,venv
 .env
+
+chengdu_travel_planner_driving/data/**.geojson
