@@ -2,6 +2,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+import time
 import requests
 from dotenv import load_dotenv
 import os
@@ -104,11 +105,20 @@ def main():
             print(f"✅ {place}: [{coords[0]:.6f}, {coords[1]:.6f}] (GCJ02)")
         else:
             print(f"❌ 无法获取 {place} 的坐标，跳过此景点")
+            
+        time.sleep(1)  # 避免请求过快被限流
     
     if len(locations) < 2:
         print("❌ 有效景点少于2个，无法进行路线规划。")
         sys.exit(1)
-
+    # 确保所有的景点都获取了 不然退出程序 让用户手动输入景点或者调整输入景点为更结构化的数据
+    print(f"\n📍 共获取到 {len(locations)} 个有效景点坐标。")
+    if len(locations) != len(places):
+        print("⚠️ 有些景点坐标获取失败，已跳过。请检查输入的景点名称是否正确。")
+        exit_choice = input("是否继续进行路线规划？(y/n): ").strip().lower()
+        if exit_choice != 'y':
+            print("已取消路线规划。")
+            sys.exit(0)
     # 确保缓存目录存在
     cache_dir = script_dir / "cache"
     cache_dir.mkdir(exist_ok=True)

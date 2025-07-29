@@ -94,7 +94,7 @@ def plot_manual_route(waypoints, locations, path_cache, map_filename="manual_rou
         m.fit_bounds(all_route_coords)
     
     # 保存为HTML
-    output_path = script_dir.parent / "data/map" / map_filename
+    output_path = script_dir / "data" / "maps" / map_filename
     m.save(output_path)
     print(f"已生成路线地图: {output_path} (共使用{total_path_points}个真实路径点)")
     if total_path_points == 0:

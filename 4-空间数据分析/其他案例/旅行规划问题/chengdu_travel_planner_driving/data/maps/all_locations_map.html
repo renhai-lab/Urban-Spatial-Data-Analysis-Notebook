@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+            <meta name="viewport" content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                #map_c3341d15fca9b78f6f68c565681ca3a1 {
+                    position: relative;
+                    width: 100.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+                .leaflet-container { font-size: 1rem; }
+            </style>
+
+            <style>html, body {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            </style>
+
+            <style>#map {
+                position:absolute;
+                top:0;
+                bottom:0;
+                right:0;
+                left:0;
+                }
+            </style>
+
+            <script>
+                L_NO_TOUCH = false;
+                L_DISABLE_3D = false;
+            </script>
+
+        
+</head>
+<body>
+    
+    
+            <div class="folium-map" id="map_c3341d15fca9b78f6f68c565681ca3a1" ></div>
+        
+</body>
+<script>
+    
+    
+            var map_c3341d15fca9b78f6f68c565681ca3a1 = L.map(
+                "map_c3341d15fca9b78f6f68c565681ca3a1",
+                {
+                    center: [30.59277708059851, 104.15193317870792],
+                    crs: L.CRS.EPSG3857,
+                    ...{
+  "zoom": 13,
+  "zoomControl": true,
+  "preferCanvas": false,
+}
+
+                }
+            );
+
+            
+
+        
+    
+            var tile_layer_5938656b55acdbb1d76d44f444e19d21 = L.tileLayer(
+                "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                {
+  "minZoom": 0,
+  "maxZoom": 19,
+  "maxNativeZoom": 19,
+  "noWrap": false,
+  "attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_5938656b55acdbb1d76d44f444e19d21.addTo(map_c3341d15fca9b78f6f68c565681ca3a1);
+        
+    
+            var marker_5b8187bdb8dca4b7c3d5d79207b64047 = L.marker(
+                [30.59277708059851, 104.15193317870792],
+                {
+}
+            ).addTo(map_c3341d15fca9b78f6f68c565681ca3a1);
+        
+    
+            var icon_9a26c6aa358de4e792917eecb1f26193 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "blue",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_2cccf7eadd1d8c5997a723ccbb2f39a6 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_959f3ac9385e00aac7d6620f37ff78c7 = $(`<div id="html_959f3ac9385e00aac7d6620f37ff78c7" style="width: 100.0%; height: 100.0%;"><b>1. 成都俊发星雅俊园</b></div>`)[0];
+                popup_2cccf7eadd1d8c5997a723ccbb2f39a6.setContent(html_959f3ac9385e00aac7d6620f37ff78c7);
+            
+        
+
+        marker_5b8187bdb8dca4b7c3d5d79207b64047.bindPopup(popup_2cccf7eadd1d8c5997a723ccbb2f39a6)
+        ;
+
+        
+    
+    
+            marker_5b8187bdb8dca4b7c3d5d79207b64047.bindTooltip(
+                `<div style="color: navy; font-weight: bold;">
+                     1. 成都俊发星雅俊园
+                 </div>`,
+                {
+  "permanent": true,
+  "direction": "right",
+  "offset": [10, 0],
+  "sticky": true,
+}
+            );
+        
+    
+                marker_5b8187bdb8dca4b7c3d5d79207b64047.setIcon(icon_9a26c6aa358de4e792917eecb1f26193);
+            
+    
+            var marker_e08ddad2d58330174fe7086e25da0c69 = L.marker(
+                [30.673855164685616, 104.00140910294547],
+                {
+}
+            ).addTo(map_c3341d15fca9b78f6f68c565681ca3a1);
+        
+    
+            var icon_dbe5c6d61fddcf12a2223599764b3c8f = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "blue",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_e743bed16fece00ce371d7f5924cc696 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_0f4d656ffe304a96019820db1d061192 = $(`<div id="html_0f4d656ffe304a96019820db1d061192" style="width: 100.0%; height: 100.0%;"><b>2. 成都西村大院</b></div>`)[0];
+                popup_e743bed16fece00ce371d7f5924cc696.setContent(html_0f4d656ffe304a96019820db1d061192);
+            
+        
+
+        marker_e08ddad2d58330174fe7086e25da0c69.bindPopup(popup_e743bed16fece00ce371d7f5924cc696)
+        ;
+
+        
+    
+    
+            marker_e08ddad2d58330174fe7086e25da0c69.bindTooltip(
+                `<div style="color: navy; font-weight: bold;">
+                     2. 成都西村大院
+                 </div>`,
+                {
+  "permanent": true,
+  "direction": "right",
+  "offset": [10, 0],
+  "sticky": true,
+}
+            );
+        
+    
+                marker_e08ddad2d58330174fe7086e25da0c69.setIcon(icon_dbe5c6d61fddcf12a2223599764b3c8f);
+            
+    
+            var marker_a0e54abc1eb0b273415993cc240e80fb = L.marker(
+                [30.64745376555468, 104.08355035242862],
+                {
+}
+            ).addTo(map_c3341d15fca9b78f6f68c565681ca3a1);
+        
+    
+            var icon_48d7efbc9a6ac21f22594ca64c6c4c3e = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "blue",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_bd9f1740a47091c435340276d1db933c = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_7b46ac09f03f9a6aba6f525afa39cefa = $(`<div id="html_7b46ac09f03f9a6aba6f525afa39cefa" style="width: 100.0%; height: 100.0%;"><b>3. 成都水井坊博物馆</b></div>`)[0];
+                popup_bd9f1740a47091c435340276d1db933c.setContent(html_7b46ac09f03f9a6aba6f525afa39cefa);
+            
+        
+
+        marker_a0e54abc1eb0b273415993cc240e80fb.bindPopup(popup_bd9f1740a47091c435340276d1db933c)
+        ;
+
+        
+    
+    
+            marker_a0e54abc1eb0b273415993cc240e80fb.bindTooltip(
+                `<div style="color: navy; font-weight: bold;">
+                     3. 成都水井坊博物馆
+                 </div>`,
+                {
+  "permanent": true,
+  "direction": "right",
+  "offset": [10, 0],
+  "sticky": true,
+}
+            );
+        
+    
+                marker_a0e54abc1eb0b273415993cc240e80fb.setIcon(icon_48d7efbc9a6ac21f22594ca64c6c4c3e);
+            
+    
+            var marker_f4e6c1792533d3062342bc43e7750a6d = L.marker(
+                [30.655762555888906, 104.08127602989481],
+                {
+}
+            ).addTo(map_c3341d15fca9b78f6f68c565681ca3a1);
+        
+    
+            var icon_e2d1cc29f60be04978033541c082e32a = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "blue",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_d29624f339a499250b1b6f0f6bb4a843 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_e7989b4049fcc86dc727c39596c5ac20 = $(`<div id="html_e7989b4049fcc86dc727c39596c5ac20" style="width: 100.0%; height: 100.0%;"><b>4. 成都太古里</b></div>`)[0];
+                popup_d29624f339a499250b1b6f0f6bb4a843.setContent(html_e7989b4049fcc86dc727c39596c5ac20);
+            
+        
+
+        marker_f4e6c1792533d3062342bc43e7750a6d.bindPopup(popup_d29624f339a499250b1b6f0f6bb4a843)
+        ;
+
+        
+    
+    
+            marker_f4e6c1792533d3062342bc43e7750a6d.bindTooltip(
+                `<div style="color: navy; font-weight: bold;">
+                     4. 成都太古里
+                 </div>`,
+                {
+  "permanent": true,
+  "direction": "right",
+  "offset": [10, 0],
+  "sticky": true,
+}
+            );
+        
+    
+                marker_f4e6c1792533d3062342bc43e7750a6d.setIcon(icon_e2d1cc29f60be04978033541c082e32a);
+            
+    
+            var marker_196eb21e12027c79eadbf28f16a44681 = L.marker(
+                [30.544196509114133, 104.0681242709076],
+                {
+}
+            ).addTo(map_c3341d15fca9b78f6f68c565681ca3a1);
+        
+    
+            var icon_9ee03bf58533271be2b6162759e2f83d = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "blue",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_8fc86338cda876b988ac8749e14b417d = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_f848aa6690c5222c8f590918ffc74cba = $(`<div id="html_f848aa6690c5222c8f590918ffc74cba" style="width: 100.0%; height: 100.0%;"><b>5. 成都当代美术馆</b></div>`)[0];
+                popup_8fc86338cda876b988ac8749e14b417d.setContent(html_f848aa6690c5222c8f590918ffc74cba);
+            
+        
+
+        marker_196eb21e12027c79eadbf28f16a44681.bindPopup(popup_8fc86338cda876b988ac8749e14b417d)
+        ;
+
+        
+    
+    
+            marker_196eb21e12027c79eadbf28f16a44681.bindTooltip(
+                `<div style="color: navy; font-weight: bold;">
+                     5. 成都当代美术馆
+                 </div>`,
+                {
+  "permanent": true,
+  "direction": "right",
+  "offset": [10, 0],
+  "sticky": true,
+}
+            );
+        
+    
+                marker_196eb21e12027c79eadbf28f16a44681.setIcon(icon_9ee03bf58533271be2b6162759e2f83d);
+            
+    
+            var marker_9e5c5c08355ebcc38bb3823ea6296cb5 = L.marker(
+                [30.634026849858344, 104.06527402693646],
+                {
+}
+            ).addTo(map_c3341d15fca9b78f6f68c565681ca3a1);
+        
+    
+            var icon_5e1acf91d69bda8e9129359ce4511cd2 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "blue",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_d522296742b1a254ed9559d889c8e2a0 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_bd2cc1e52a89c7f926532722ac40ee6f = $(`<div id="html_bd2cc1e52a89c7f926532722ac40ee6f" style="width: 100.0%; height: 100.0%;"><b>6. 成都来福士广场</b></div>`)[0];
+                popup_d522296742b1a254ed9559d889c8e2a0.setContent(html_bd2cc1e52a89c7f926532722ac40ee6f);
+            
+        
+
+        marker_9e5c5c08355ebcc38bb3823ea6296cb5.bindPopup(popup_d522296742b1a254ed9559d889c8e2a0)
+        ;
+
+        
+    
+    
+            marker_9e5c5c08355ebcc38bb3823ea6296cb5.bindTooltip(
+                `<div style="color: navy; font-weight: bold;">
+                     6. 成都来福士广场
+                 </div>`,
+                {
+  "permanent": true,
+  "direction": "right",
+  "offset": [10, 0],
+  "sticky": true,
+}
+            );
+        
+    
+                marker_9e5c5c08355ebcc38bb3823ea6296cb5.setIcon(icon_5e1acf91d69bda8e9129359ce4511cd2);
+            
+    
+            var marker_f209ebaf31836a91b4ae7730c3ee94eb = L.marker(
+                [30.66564974490845, 104.05269474034797],
+                {
+}
+            ).addTo(map_c3341d15fca9b78f6f68c565681ca3a1);
+        
+    
+            var icon_11cac3c0531f3d6678f2e36253b32525 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "blue",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_b24bb7fb5a79de8b078b90ce249e0469 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_c7cdecd366bfc79015239ecd0c9e0712 = $(`<div id="html_c7cdecd366bfc79015239ecd0c9e0712" style="width: 100.0%; height: 100.0%;"><b>7. 成都宽窄巷子</b></div>`)[0];
+                popup_b24bb7fb5a79de8b078b90ce249e0469.setContent(html_c7cdecd366bfc79015239ecd0c9e0712);
+            
+        
+
+        marker_f209ebaf31836a91b4ae7730c3ee94eb.bindPopup(popup_b24bb7fb5a79de8b078b90ce249e0469)
+        ;
+
+        
+    
+    
+            marker_f209ebaf31836a91b4ae7730c3ee94eb.bindTooltip(
+                `<div style="color: navy; font-weight: bold;">
+                     7. 成都宽窄巷子
+                 </div>`,
+                {
+  "permanent": true,
+  "direction": "right",
+  "offset": [10, 0],
+  "sticky": true,
+}
+            );
+        
+    
+                marker_f209ebaf31836a91b4ae7730c3ee94eb.setIcon(icon_11cac3c0531f3d6678f2e36253b32525);
+            
+    
+            var marker_1e80980bb5d773725dbb88e77e50c6d3 = L.marker(
+                [30.642988481897895, 104.044809792219],
+                {
+}
+            ).addTo(map_c3341d15fca9b78f6f68c565681ca3a1);
+        
+    
+            var icon_48898a846f5847ffb17666c0bb646bd7 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "blue",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_1fe2575413fcefac4b4a69ec93d390a7 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_df923b0390246e891622f1100963e5f1 = $(`<div id="html_df923b0390246e891622f1100963e5f1" style="width: 100.0%; height: 100.0%;"><b>8. 成都市武侯祠横街</b></div>`)[0];
+                popup_1fe2575413fcefac4b4a69ec93d390a7.setContent(html_df923b0390246e891622f1100963e5f1);
+            
+        
+
+        marker_1e80980bb5d773725dbb88e77e50c6d3.bindPopup(popup_1fe2575413fcefac4b4a69ec93d390a7)
+        ;
+
+        
+    
+    
+            marker_1e80980bb5d773725dbb88e77e50c6d3.bindTooltip(
+                `<div style="color: navy; font-weight: bold;">
+                     8. 成都市武侯祠横街
+                 </div>`,
+                {
+  "permanent": true,
+  "direction": "right",
+  "offset": [10, 0],
+  "sticky": true,
+}
+            );
+        
+    
+                marker_1e80980bb5d773725dbb88e77e50c6d3.setIcon(icon_48898a846f5847ffb17666c0bb646bd7);
+            
+    
+            var marker_8d0e6eee09abe2ec408c7b05f4d2725f = L.marker(
+                [30.64273913632822, 104.08704292636898],
+                {
+}
+            ).addTo(map_c3341d15fca9b78f6f68c565681ca3a1);
+        
+    
+            var icon_4e1f530196a7870d6d21eeb05a933281 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "blue",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_e604d5435fccbfb8ad012f2e7a3e52f7 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_1cf0259b197096d32a046ce3afbb1010 = $(`<div id="html_1cf0259b197096d32a046ce3afbb1010" style="width: 100.0%; height: 100.0%;"><b>9. 成都九眼桥</b></div>`)[0];
+                popup_e604d5435fccbfb8ad012f2e7a3e52f7.setContent(html_1cf0259b197096d32a046ce3afbb1010);
+            
+        
+
+        marker_8d0e6eee09abe2ec408c7b05f4d2725f.bindPopup(popup_e604d5435fccbfb8ad012f2e7a3e52f7)
+        ;
+
+        
+    
+    
+            marker_8d0e6eee09abe2ec408c7b05f4d2725f.bindTooltip(
+                `<div style="color: navy; font-weight: bold;">
+                     9. 成都九眼桥
+                 </div>`,
+                {
+  "permanent": true,
+  "direction": "right",
+  "offset": [10, 0],
+  "sticky": true,
+}
+            );
+        
+    
+                marker_8d0e6eee09abe2ec408c7b05f4d2725f.setIcon(icon_4e1f530196a7870d6d21eeb05a933281);
+            
+    
+            var marker_1bc0733158eb7b784eef33d45e05e0d4 = L.marker(
+                [30.652032509760406, 104.0391223776059],
+                {
+}
+            ).addTo(map_c3341d15fca9b78f6f68c565681ca3a1);
+        
+    
+            var icon_76ffd93caa8e389f16629ae7e6d3dce6 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "blue",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_834ef7fd6b5f25a7163c1212d742b814 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_e3095acd773c81f3f30d651f17b41fe1 = $(`<div id="html_e3095acd773c81f3f30d651f17b41fe1" style="width: 100.0%; height: 100.0%;"><b>10. 全季酒店(成都武侯祠店)</b></div>`)[0];
+                popup_834ef7fd6b5f25a7163c1212d742b814.setContent(html_e3095acd773c81f3f30d651f17b41fe1);
+            
+        
+
+        marker_1bc0733158eb7b784eef33d45e05e0d4.bindPopup(popup_834ef7fd6b5f25a7163c1212d742b814)
+        ;
+
+        
+    
+    
+            marker_1bc0733158eb7b784eef33d45e05e0d4.bindTooltip(
+                `<div style="color: navy; font-weight: bold;">
+                     10. 全季酒店(成都武侯祠店)
+                 </div>`,
+                {
+  "permanent": true,
+  "direction": "right",
+  "offset": [10, 0],
+  "sticky": true,
+}
+            );
+        
+    
+                marker_1bc0733158eb7b784eef33d45e05e0d4.setIcon(icon_76ffd93caa8e389f16629ae7e6d3dce6);
+            
+</script>
+</html>

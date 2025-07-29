@@ -26,7 +26,7 @@ for name, value in locations.items():
 print(f"正在绘制所有景点分布地图: {len(coords_wgs)}个景点:{locations}")
 
 # 以第一个点为中心
-m = folium.Map(location=coords_wgs[0], zoom_start=12)
+m = folium.Map(location=coords_wgs[0], zoom_start=13)
 
 # 添加所有景点标记
 for idx, (name, (wgs_lat, wgs_lon)) in enumerate(zip(names, coords_wgs)):
