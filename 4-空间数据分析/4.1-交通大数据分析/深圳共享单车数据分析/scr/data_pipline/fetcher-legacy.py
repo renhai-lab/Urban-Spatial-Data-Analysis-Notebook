@@ -38,7 +38,7 @@ def _build_output_csv(start_date: str, end_date: str) -> Path:
 # 主函数
 if __name__ == "__main__":
     # 环境变量和初始化
-    app_key = "41373f2b1ef34a56b0aa379aab68d0d5"  # TODO: 替换为你从深圳开放数据平台申请的 app_key
+    app_key = "your-api-key"  # TODO: 替换为你从深圳开放数据平台申请的 app_key
     page_num = 1
     rows = 4000
     # 日期范围 可以选择你要爬取的范围

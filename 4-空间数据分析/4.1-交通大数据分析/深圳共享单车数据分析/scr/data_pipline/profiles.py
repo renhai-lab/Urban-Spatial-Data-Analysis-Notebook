@@ -41,8 +41,9 @@ class BikeProfile(DatasetProfile):
                 "company_id",
                 "start_time",
                 "end_time",
-                "start_geom",
-                "end_geom",
+                # 仅写入原始坐标（不做转换/判断）
+                "start_geom_raw",
+                "end_geom_raw",
             ],
             table_columns_sql="""
             id BIGSERIAL PRIMARY KEY,
@@ -50,15 +51,37 @@ class BikeProfile(DatasetProfile):
             company_id TEXT,
             start_time TIMESTAMPTZ,
             end_time TIMESTAMPTZ,
-            start_geom GEOGRAPHY(Point, 4326),
-            end_geom GEOGRAPHY(Point, 4326)
+            -- 原始坐标（未转换，直接按接口给出的经纬度写入）
+            start_geom_raw GEOMETRY(Point, 4326),
+            end_geom_raw GEOMETRY(Point, 4326),
+            -- 原始坐标的坐标系标识（可为空，后续人工批量标记）
+            source_crs TEXT,
+            -- 统一的 WGS84 坐标（用于分析；初始为空，后续批量转换填充）
+            start_geom_wgs84 GEOMETRY(Point, 4326),
+            end_geom_wgs84 GEOMETRY(Point, 4326)
             """,
             indexes=[
                 IndexSpec(name="idx_start_time", columns_sql="start_time"),
+                # 原始坐标空间索引
                 IndexSpec(
-                    name="idx_start_geom", columns_sql="start_geom", using="GIST"
+                    name="idx_start_geom_raw",
+                    columns_sql="start_geom_raw",
+                    using="GIST",
                 ),
-                IndexSpec(name="idx_end_geom", columns_sql="end_geom", using="GIST"),
+                IndexSpec(
+                    name="idx_end_geom_raw", columns_sql="end_geom_raw", using="GIST"
+                ),
+                # 标准化坐标空间索引
+                IndexSpec(
+                    name="idx_start_geom_w84",
+                    columns_sql="start_geom_wgs84",
+                    using="GIST",
+                ),
+                IndexSpec(
+                    name="idx_end_geom_w84", columns_sql="end_geom_wgs84", using="GIST"
+                ),
+                # 原始坐标系标识索引（便于筛选）
+                IndexSpec(name="idx_source_crs", columns_sql="source_crs"),
             ],
             latest_date_column="start_time",
         )
@@ -84,8 +107,8 @@ class BikeProfile(DatasetProfile):
             record.get("COM_ID"),
             start_time_utc,
             end_time_utc,
-            start_geom_wkt,
-            end_geom_wkt,
+            start_geom_wkt,  # start_geom_raw
+            end_geom_wkt,  # end_geom_raw
         )
 
     def field_labels(self) -> Dict[str, str]:
@@ -96,8 +119,11 @@ class BikeProfile(DatasetProfile):
             "company_id": "企业ID",
             "start_time": "开始时间",
             "end_time": "结束时间",
-            "start_geom": "起点坐标（WGS84 Point）",
-            "end_geom": "终点坐标（WGS84 Point）",
+            "start_geom_raw": "起点原始坐标（未转换，Point）",
+            "end_geom_raw": "终点原始坐标（未转换，Point）",
+            "source_crs": "原始坐标系标识（如 GCJ-02/WGS-84/BD-09/UNKNOWN）",
+            "start_geom_wgs84": "起点坐标（WGS84，统一用于分析）",
+            "end_geom_wgs84": "终点坐标（WGS84，统一用于分析）",
         }
 
 

@@ -2,8 +2,10 @@
 按天核查工具：统计数据库内每日条数，找出缺失天/异常天，并导出 CSV。
 
 用法：直接运行本脚本将读取 settings 与当前 profile，范围为 DATA_START_DATE ~ DATA_END_DATE。
+uv run python -m scr.data_pipline.audit_days
 输出：
-- logs/daily_counts.csv  包含 day,cnt 两列
+- （可以查看每天有多少数据）data/audit/daily_counts.csv：包含 day,cnt 两列
+- （主要看这个）data/audit/daily_counts_with_api.csv ：包含 day,db_count,api_total，delta（与数据库的差别）
 - 终端打印缺失天列表与概要统计
 
 注意：
@@ -165,6 +167,10 @@ def detect_low_days(df: pd.DataFrame, ratio: float = 0.5) -> List[str]:
 def main():
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
+
+    out_csv_dir = Path("data/audit")
+    out_csv_dir.mkdir(exist_ok=True)
+
     logger.remove()
     logger.add(lambda m: print(m, end=""), level=settings.LOG_LEVEL)
     logger.add(
@@ -178,7 +184,7 @@ def main():
     )
 
     df = fetch_daily_counts_db(conn_str, profile)
-    out_csv = log_dir / "daily_counts.csv"
+    out_csv = out_csv_dir / "daily_counts.csv"
     df_out = df.copy()
     df_out["day"] = pd.to_datetime(df_out["day"]).dt.strftime("%Y-%m-%d")
     df_out.to_csv(out_csv, index=False, encoding="utf-8")
@@ -235,7 +241,7 @@ def main():
         df_api["delta"] = df_api["api_total"].astype("Int64") - df_api[
             "db_count"
         ].astype("Int64")
-        out2 = log_dir / "daily_counts_with_api.csv"
+        out2 = out_csv_dir / "daily_counts_with_api.csv"
         df_api.to_csv(out2, index=False, encoding="utf-8")
         logger.info(f"已导出 {out2}")
 
