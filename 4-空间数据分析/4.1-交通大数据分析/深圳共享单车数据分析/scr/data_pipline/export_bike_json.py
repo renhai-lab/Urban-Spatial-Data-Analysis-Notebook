@@ -1,5 +1,6 @@
 import json
-from datetime import date
+import argparse
+from datetime import date, datetime
 from pathlib import Path
 from typing import Iterable, List, Tuple
 
@@ -111,9 +112,9 @@ def export_bike_points(day: date, limit: int = 200000) -> None:
 
     # 如果默认不是bd09 是gcj02
 
-    # # 1) 源坐标（按 settings.SOURCE_COORD 声明，默认 BD-09 地理坐标）
-    # bd_path = export_dir / f"bike_{day_str}.bd09ll.geojson"
-    # _write_geojson_features(str(bd_path), src_features, name=f"bike_{day_str}_bd09ll")
+    # 1) 源坐标（按 settings.SOURCE_COORD 声明，默认 BD-09 地理坐标）
+    bd_path = export_dir / f"bike_{day_str}gcj.bd09ll.geojson"
+    _write_geojson_features(str(bd_path), src_features, name=f"bike_{day_str}_bd09ll")
 
     # # 2) 转 GCJ-02（高德）：严格使用百度 geoconv API（由 coords.batch_convert 内部处理）
     # gcj_features = _convert_features(
@@ -135,5 +136,26 @@ def export_bike_points(day: date, limit: int = 200000) -> None:
 
 
 if __name__ == "__main__":
-    # 默认导出 2020-12-06
-    export_bike_points(date(2021, 1, 1))
+    parser = argparse.ArgumentParser(
+        description="导出指定日期（YYMMDD）的共享单车起点 GeoJSON（WGS84）"
+    )
+    parser.add_argument(
+        "day",
+        nargs="?",
+        help="日期，格式 YYYYMMDD（如 20210101 表示 2021-01-01）",
+        default=None,
+    )
+    args = parser.parse_args()
+
+    if args.day:
+        try:
+            day_dt = datetime.strptime(args.day, "%Y%m%d").date()
+        except ValueError:
+            raise SystemExit(
+                "日期格式错误：请使用 YYYYMMDD，例如 20210101 表示 2021-01-01"
+            )
+    else:
+        # 兼容旧行为：未传参则导出 2021-01-01
+        day_dt = date(2021, 1, 1)
+
+    export_bike_points(day_dt)
