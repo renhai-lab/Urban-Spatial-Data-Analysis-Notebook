@@ -19,3 +19,13 @@ dependencies = [
 [[tool.uv.index]]
 url = "https://pypi.tuna.tsinghua.edu.cn/simple"
 default = true
+
+[dependency-groups]
+dev = [
+    "geopandas[all]>=1.1.1",
+    "notebook>=7.4.5",
+    "pandas>=2.3.2",
+    "pyogrio>=0.11.1",
+    "pyproj>=3.7.2",
+    "shapely>=2.1.1",
+]

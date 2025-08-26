@@ -12,6 +12,9 @@
 
     # 指定日期范围（北京时间）
     uv run python -m scr.data_pipline.backfill_wgs84_from_raw --start 20210101 --end 20210830 --batch 5000 --dry-run false --log-every 1 --scan-all-ids true
+
+    # 断点续跑（从 last_id 继续）
+    uv run python -m scr.data_pipline.backfill_wgs84_from_raw --resume-id 55860000 --batch 10000 --dry-run false --scan-all-ids true
 """
 
 from __future__ import annotations
@@ -42,6 +45,7 @@ def _iter_batches(
     start: Optional[date],
     end: Optional[date],
     scan_all_ids: bool,
+    resume_id: int = 0,
 ) -> Iterable[List[dict]]:
     """流式获取批次数据：每批返回行字典列表。"""
     date_filter_sql = ""
@@ -58,7 +62,7 @@ def _iter_batches(
         date_filter_sql = "AND ((start_time AT TIME ZONE 'Asia/Shanghai')::date <= %s)"
         params.append(end)
 
-    last_id = 0
+    last_id = int(resume_id) if resume_id else 0
     while True:
         where_need_sql = (
             ""
@@ -103,6 +107,10 @@ def backfill(
     dry_run: bool,
     log_every: int,
     scan_all_ids: bool,
+    resume_id: int = 0,
+    update_chunk: int = 2000,
+    fast_commit: bool = False,
+    commit_every_chunks: int = 1,
 ) -> int:
     conn_str = settings.get_conn_str()
     updated = 0
@@ -111,25 +119,58 @@ def backfill(
         with conn.cursor() as cset:
             cset.execute("SET application_name = 'backfill_wgs84_from_raw';")
             cset.execute("SET lock_timeout = '2s';")
+            if fast_commit and not dry_run:
+                # 提升吞吐（风险：主从延迟或极端断电风险，按需开启）
+                cset.execute("SET synchronous_commit = off;")
         table = settings.TABLE_NAME
-        upd_sql = sql.SQL(
-            """
-            UPDATE {table}
-            SET start_geom_wgs84 = CASE
-                    WHEN %s IS NULL OR %s IS NULL THEN start_geom_wgs84
-                    ELSE COALESCE(start_geom_wgs84, ST_SetSRID(ST_MakePoint(%s,%s),4326))
-                END,
-                end_geom_wgs84 = CASE
-                    WHEN %s IS NULL OR %s IS NULL THEN end_geom_wgs84
-                    ELSE COALESCE(end_geom_wgs84, ST_SetSRID(ST_MakePoint(%s,%s),4326))
-                END
-            WHERE id = %s
-            """
-        ).format(table=sql.Identifier(table))
+
+        def _bulk_update(
+            rows_params: List[
+                Tuple[
+                    int,
+                    Optional[float],
+                    Optional[float],
+                    Optional[float],
+                    Optional[float],
+                ]
+            ],
+        ):
+            """使用单条 UPDATE ... FROM (VALUES ...) 批量更新，rows_params: [(id, sx, sy, ex, ey), ...]"""
+            if not rows_params:
+                return
+            values_nodes = [
+                sql.SQL(
+                    "(%s::bigint,%s::double precision,%s::double precision,%s::double precision,%s::double precision)"
+                )
+            ] * len(rows_params)
+            placeholders = sql.SQL(",").join(values_nodes)
+            flat_params: List[Optional[float]] = []
+            for rid, sx, sy, ex, ey in rows_params:
+                flat_params.extend([rid, sx, sy, ex, ey])
+
+            q = sql.SQL(
+                """
+                UPDATE {table} AS t
+                SET start_geom_wgs84 = CASE
+                        WHEN v.sx IS NULL OR v.sy IS NULL THEN t.start_geom_wgs84
+                        ELSE COALESCE(t.start_geom_wgs84, ST_SetSRID(ST_MakePoint(v.sx, v.sy), 4326))
+                    END,
+                    end_geom_wgs84 = CASE
+                        WHEN v.ex IS NULL OR v.ey IS NULL THEN t.end_geom_wgs84
+                        ELSE COALESCE(t.end_geom_wgs84, ST_SetSRID(ST_MakePoint(v.ex, v.ey), 4326))
+                    END
+                FROM (VALUES {values}) AS v(id, sx, sy, ex, ey)
+                WHERE t.id = v.id
+                """
+            ).format(table=sql.Identifier(table), values=placeholders)
+            with conn.cursor() as cu:
+                cu.execute(q, flat_params)
 
         t0 = time.time()
         batch_idx = 0
-        for rows in _iter_batches(conn, table, batch, start, end, scan_all_ids):
+        for rows in _iter_batches(
+            conn, table, batch, start, end, scan_all_ids, resume_id=resume_id
+        ):
             batch_idx += 1
             if dry_run:
                 updated += len(rows)
@@ -139,17 +180,14 @@ def backfill(
                     )
                 continue
 
-            params_list: List[
+            # 先在 Python 侧完成 GCJ->WGS 转换，再进行批量更新
+            to_update: List[
                 Tuple[
-                    Optional[float],
-                    Optional[float],
-                    Optional[float],
-                    Optional[float],
-                    Optional[float],
-                    Optional[float],
-                    Optional[float],
-                    Optional[float],
                     int,
+                    Optional[float],
+                    Optional[float],
+                    Optional[float],
+                    Optional[float],
                 ]
             ] = []
             for r in rows:
@@ -170,11 +208,26 @@ def backfill(
                     wx, wy = gcj02_to_wgs84(float(e_lng), float(e_lat))
                     ex, ey = wx, wy
 
-                params_list.append((sx, sy, sx, sy, ex, ey, ex, ey, sid))
+                # 仅当至少一个目标坐标可写入时才进入更新列表
+                if (sx is not None and sy is not None) or (
+                    ex is not None and ey is not None
+                ):
+                    to_update.append((sid, sx, sy, ex, ey))
 
-            with conn.cursor() as cu:
-                cu.executemany(upd_sql, params_list)
-            conn.commit()
+            # 大批量写入拆成较小 SQL 分块，减少往返与锁持有时间
+            commit_every = max(1, int(commit_every_chunks))
+            pending = 0
+            for i in range(0, len(to_update), max(1, update_chunk)):
+                chunk = to_update[i : i + update_chunk]
+                if not chunk:
+                    continue
+                _bulk_update(chunk)
+                pending += 1
+                if pending % commit_every == 0:
+                    conn.commit()
+                    pending = 0
+            if pending:
+                conn.commit()
             updated += len(rows)
 
             if batch_idx % max(1, log_every) == 0:
@@ -210,6 +263,30 @@ def main():
     ap.add_argument(
         "--log-every", type=int, default=1, help="每多少批输出一次进度（默认每批）"
     )
+    ap.add_argument(
+        "--resume-id",
+        type=int,
+        default=0,
+        help="从给定 id 开始继续扫描（WHERE id > resume_id）",
+    )
+    ap.add_argument(
+        "--update-chunk",
+        type=int,
+        default=2000,
+        help="单条 UPDATE 内部 VALUES 的最大行数（避免参数过多，默认 2000）",
+    )
+    ap.add_argument(
+        "--fast-commit",
+        type=str,
+        default="false",
+        help="设置 synchronous_commit=off，加速提交（存在极端断电风险）（true/false）",
+    )
+    ap.add_argument(
+        "--commit-every-chunks",
+        type=int,
+        default=1,
+        help="每处理多少个 update 子块提交一次事务（默认每块提交一次）",
+    )
     args = ap.parse_args()
 
     start = parse_day(args.start)
@@ -217,7 +294,19 @@ def main():
     dry_run = str(args.dry_run).lower() in {"1", "true", "yes"}
 
     scan_all_ids = str(args.scan_all_ids).lower() in {"1", "true", "yes"}
-    n = backfill(args.batch, start, end, dry_run, args.log_every, scan_all_ids)
+    fast_commit = str(args.fast_commit).lower() in {"1", "true", "yes"}
+    n = backfill(
+        args.batch,
+        start,
+        end,
+        dry_run,
+        args.log_every,
+        scan_all_ids,
+        resume_id=args.resume_id,
+        update_chunk=args.update_chunk,
+        fast_commit=fast_commit,
+        commit_every_chunks=args.commit_every_chunks,
+    )
     print(("将要更新" if dry_run else "已更新"), n, "行")
 
 
