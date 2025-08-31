@@ -189,10 +189,12 @@ def export_day(
                     if "csv" in formats:
                         try:
                             csv_file = (
-                                dirs[coord_set]["csv"] / f"bike_data_{day_str}.csv"
+                                dirs[coord_set]["csv"]
+                                / f"bike_data_{day_str}_{coord_set}.csv"
                             )
                             csv_zip_file = (
-                                dirs[coord_set]["csv"] / f"bike_data_{day_str}.zip"
+                                dirs[coord_set]["csv"]
+                                / f"bike_data_{day_str}_{coord_set}.zip"
                             )
 
                             # 写入CSV
@@ -226,10 +228,11 @@ def export_day(
                         try:
                             geojson_file = (
                                 dirs[coord_set]["geojson"]
-                                / f"bike_data_{day_str}.geojson"
+                                / f"bike_data_{day_str}_{coord_set}.geojson"
                             )
                             geojson_zip_file = (
-                                dirs[coord_set]["geojson"] / f"bike_data_{day_str}.zip"
+                                dirs[coord_set]["geojson"]
+                                / f"bike_data_{day_str}_{coord_set}.zip"
                             )
 
                             features = []
