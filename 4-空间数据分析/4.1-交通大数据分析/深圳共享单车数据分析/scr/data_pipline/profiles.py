@@ -1,8 +1,17 @@
+"""
+优化版本的数据集配置文件，支持：
+1. TimescaleDB分区
+2. 实时坐标转换（GCJ-02 -> WGS84）
+3. 简化表结构
+4. 集成按天导出
+"""
+
 from dataclasses import dataclass
 from typing import List, Optional, Dict
 
 from .config import settings
 from .utils import to_float, to_int, parse_dt_beijing
+from .coords import gcj02_to_wgs84
 
 
 @dataclass
@@ -21,6 +30,12 @@ class DatasetProfile:
     table_columns_sql: str
     indexes: List[IndexSpec]
     latest_date_column: str
+    # 新增：是否启用TimescaleDB分区
+    enable_timescale: bool = True
+    # 新增：分区时间列
+    partition_column: str = "start_time"
+    # 新增：分区间隔（如 '1 day', '1 week'）
+    partition_interval: str = "1 day"
 
     def prepare_record(self, record: dict):  # pragma: no cover - overridden
         raise NotImplementedError
@@ -29,139 +44,170 @@ class DatasetProfile:
         """Return a mapping of raw API field names to Chinese descriptions."""
         return {}
 
+    def get_timescale_setup_sql(self) -> str:
+        """返回TimescaleDB设置SQL"""
+        if not self.enable_timescale:
+            return ""
+        
+        return f"""
+        -- 创建hypertable（如果尚未创建）
+        SELECT create_hypertable('{self.table_name}', '{self.partition_column}', 
+                                 chunk_time_interval => INTERVAL '{self.partition_interval}',
+                                 if_not_exists => TRUE);
+        """
 
-class BikeProfile(DatasetProfile):
+
+class BikeProfileV2(DatasetProfile):
+    """优化版本的共享单车配置：实时转换坐标，简化表结构"""
+    
     def __init__(self):
         super().__init__(
-            name="bike",
+            name="bike_v2",
             api_url=settings.API_URL,
-            table_name=settings.TABLE_NAME,
+            table_name=settings.TABLE_NAME,  # 直接使用配置中的表名
             copy_columns=[
                 "user_id",
-                "company_id",
+                "company_id", 
                 "start_time",
                 "end_time",
-                # 仅写入原始坐标（不做转换/判断）
-                "start_geom_raw",
+                "start_geom_raw",     # 保留原始坐标
                 "end_geom_raw",
+                "start_geom_wgs84",   # 转换后的WGS84坐标
+                "end_geom_wgs84",
+                "source_crs",
             ],
             table_columns_sql="""
-            id BIGSERIAL PRIMARY KEY,
+            id BIGSERIAL,
             user_id TEXT,
             company_id TEXT,
-            start_time TIMESTAMPTZ,
+            start_time TIMESTAMPTZ NOT NULL,
             end_time TIMESTAMPTZ,
-            -- 原始坐标（未转换，直接按接口给出的经纬度写入）
+            -- 原始坐标（直接按接口给出的经纬度写入）
             start_geom_raw GEOMETRY(Point, 4326),
             end_geom_raw GEOMETRY(Point, 4326),
-            -- 原始坐标的坐标系标识（可为空，后续人工批量标记）
-            source_crs TEXT,
-            -- 统一的 WGS84 坐标（用于分析；初始为空，后续批量转换填充）
+            -- 转换后的 WGS84 坐标（实时转换）
             start_geom_wgs84 GEOMETRY(Point, 4326),
-            end_geom_wgs84 GEOMETRY(Point, 4326)
+            end_geom_wgs84 GEOMETRY(Point, 4326),
+            -- 原始坐标系标识（默认 'GCJ-02'）
+            source_crs TEXT DEFAULT 'GCJ-02',
+            PRIMARY KEY (id, start_time)
             """,
             indexes=[
-                IndexSpec(name="idx_start_time", columns_sql="start_time"),
+                IndexSpec(name="idx_start_time_v2", columns_sql="start_time"),
+                IndexSpec(name="idx_company_id_v2", columns_sql="company_id"),
                 # 原始坐标空间索引
                 IndexSpec(
-                    name="idx_start_geom_raw",
+                    name="idx_start_geom_raw_v2",
                     columns_sql="start_geom_raw",
                     using="GIST",
                 ),
                 IndexSpec(
-                    name="idx_end_geom_raw", columns_sql="end_geom_raw", using="GIST"
+                    name="idx_end_geom_raw_v2", 
+                    columns_sql="end_geom_raw", 
+                    using="GIST"
                 ),
-                # 标准化坐标空间索引
+                # WGS84坐标空间索引
                 IndexSpec(
-                    name="idx_start_geom_w84",
+                    name="idx_start_geom_wgs84_v2",
                     columns_sql="start_geom_wgs84",
                     using="GIST",
                 ),
                 IndexSpec(
-                    name="idx_end_geom_w84", columns_sql="end_geom_wgs84", using="GIST"
+                    name="idx_end_geom_wgs84_v2", 
+                    columns_sql="end_geom_wgs84", 
+                    using="GIST"
                 ),
-                # 原始坐标系标识索引（便于筛选）
-                IndexSpec(name="idx_source_crs", columns_sql="source_crs"),
+                # 原始坐标系标识索引
+                IndexSpec(name="idx_source_crs_v2", columns_sql="source_crs"),
             ],
             latest_date_column="start_time",
+            enable_timescale=True,
+            partition_column="start_time",
+            partition_interval="1 day",
         )
 
     def prepare_record(self, record: dict):
+        """准备记录，同时保存原始坐标和转换后的WGS84坐标"""
         start_time_utc = parse_dt_beijing(record.get("START_TIME"))
         end_time_utc = parse_dt_beijing(record.get("END_TIME"))
 
-        start_geom_wkt = None
-        slon, slat = to_float(record.get("START_LNG")), to_float(
-            record.get("START_LAT")
-        )
-        if slon is not None and slat is not None:
-            start_geom_wkt = f"SRID=4326;POINT({slon} {slat})"
-
-        end_geom_wkt = None
+        # 获取原始坐标
+        slon, slat = to_float(record.get("START_LNG")), to_float(record.get("START_LAT"))
         elon, elat = to_float(record.get("END_LNG")), to_float(record.get("END_LAT"))
+
+        # 原始坐标WKT
+        start_geom_raw_wkt = None
+        if slon is not None and slat is not None:
+            start_geom_raw_wkt = f"SRID=4326;POINT({slon} {slat})"
+
+        end_geom_raw_wkt = None
         if elon is not None and elat is not None:
-            end_geom_wkt = f"SRID=4326;POINT({elon} {elat})"
+            end_geom_raw_wkt = f"SRID=4326;POINT({elon} {elat})"
+
+        # 转换为WGS84坐标
+        start_geom_wgs84_wkt = None
+        if slon is not None and slat is not None:
+            try:
+                wgs_lon, wgs_lat = gcj02_to_wgs84(slon, slat)
+                start_geom_wgs84_wkt = f"SRID=4326;POINT({wgs_lon} {wgs_lat})"
+            except Exception as e:
+                # 转换失败则使用原始坐标（可能本身就是WGS84）
+                start_geom_wgs84_wkt = start_geom_raw_wkt
+
+        end_geom_wgs84_wkt = None
+        if elon is not None and elat is not None:
+            try:
+                wgs_lon, wgs_lat = gcj02_to_wgs84(elon, elat)
+                end_geom_wgs84_wkt = f"SRID=4326;POINT({wgs_lon} {wgs_lat})"
+            except Exception as e:
+                # 转换失败则使用原始坐标
+                end_geom_wgs84_wkt = end_geom_raw_wkt
 
         return (
             record.get("USER_ID"),
             record.get("COM_ID"),
             start_time_utc,
             end_time_utc,
-            start_geom_wkt,  # start_geom_raw
-            end_geom_wkt,  # end_geom_raw
+            start_geom_raw_wkt,    # start_geom_raw
+            end_geom_raw_wkt,      # end_geom_raw
+            start_geom_wgs84_wkt,  # start_geom_wgs84
+            end_geom_wgs84_wkt,    # end_geom_wgs84
+            "GCJ-02",              # source_crs，默认假设原始数据为GCJ-02
         )
 
     def field_labels(self) -> Dict[str, str]:
-        # 与 Postgres 表列名对应的中文说明
         return {
             "id": "自增主键",
-            "user_id": "用户ID",
+            "user_id": "用户ID", 
             "company_id": "企业ID",
             "start_time": "开始时间",
             "end_time": "结束时间",
             "start_geom_raw": "起点原始坐标（未转换，Point）",
             "end_geom_raw": "终点原始坐标（未转换，Point）",
-            "source_crs": "原始坐标系标识（如 GCJ-02/WGS-84/BD-09/UNKNOWN）",
-            "start_geom_wgs84": "起点坐标（WGS84，统一用于分析）",
-            "end_geom_wgs84": "终点坐标（WGS84，统一用于分析）",
+            "start_geom_wgs84": "起点坐标（WGS84，已转换）",
+            "end_geom_wgs84": "终点坐标（WGS84，已转换）",
+            "source_crs": "原始坐标系标识（默认GCJ-02）",
         }
 
 
-class WeatherGridProfile(DatasetProfile):
+class WeatherGridProfileV2(DatasetProfile):
+    """天气格点数据配置（已优化）"""
+    
     def __init__(self):
         super().__init__(
-            name="weather_grid",
+            name="weather_grid_v2",
             api_url="https://opendata.sz.gov.cn/api/29200_00903509/1/service.xhtml",
-            table_name="sz_weather_grid",
+            table_name="sz_weather_grid_v2",
             copy_columns=[
-                "recid",
-                "ddatetime",
-                "gridid",
-                "ybsx",
-                "forecasttime",
-                "plevel",
-                "t",
-                "wspd",
-                "wdir",
-                "slp",
-                "rhsfc",
-                "rain01h",
-                "rain03h",
-                "rain06h",
-                "rain24h",
-                "v",
-                "tracerr01h",
-                "maxtofday",
-                "rain02h",
-                "wd3smaxdf",
-                "wd3smaxdd",
-                "crttime",
-                "keyid",
+                "recid", "ddatetime", "gridid", "ybsx", "forecasttime", "plevel",
+                "t", "wspd", "wdir", "slp", "rhsfc", "rain01h", "rain03h", 
+                "rain06h", "rain24h", "v", "tracerr01h", "maxtofday", "rain02h",
+                "wd3smaxdf", "wd3smaxdd", "crttime", "keyid",
             ],
             table_columns_sql="""
             id BIGSERIAL PRIMARY KEY,
             recid TEXT,
-            ddatetime TIMESTAMPTZ,
+            ddatetime TIMESTAMPTZ NOT NULL,
             gridid TEXT,
             ybsx INTEGER,
             forecasttime TIMESTAMPTZ,
@@ -185,11 +231,14 @@ class WeatherGridProfile(DatasetProfile):
             keyid TEXT
             """,
             indexes=[
-                IndexSpec(name="idx_wg_crttime", columns_sql="crttime"),
-                IndexSpec(name="idx_wg_ddatetime", columns_sql="ddatetime"),
-                IndexSpec(name="idx_wg_gridid", columns_sql="gridid"),
+                IndexSpec(name="idx_wg_v2_crttime", columns_sql="crttime"),
+                IndexSpec(name="idx_wg_v2_ddatetime", columns_sql="ddatetime"),
+                IndexSpec(name="idx_wg_v2_gridid", columns_sql="gridid"),
             ],
             latest_date_column="crttime",
+            enable_timescale=True,
+            partition_column="ddatetime",
+            partition_interval="1 day",
         )
 
     def prepare_record(self, record: dict):
@@ -219,40 +268,10 @@ class WeatherGridProfile(DatasetProfile):
             str(record.get("KEYID")) if record.get("KEYID") is not None else None,
         )
 
-    def field_labels(self) -> Dict[str, str]:
-        # 与 Postgres 表列名对应的中文说明
-        return {
-            "id": "自增主键",
-            "recid": "记录编号",
-            "ddatetime": "发布时间",
-            "gridid": "格网ID",
-            "ybsx": "预报时效（小时）",
-            "forecasttime": "预报时间",
-            "plevel": "预报级别",
-            "t": "温度（摄氏度）",
-            "wspd": "风速（米/秒）",
-            "wdir": "风向（度）",
-            "slp": "气压（百帕）",
-            "rhsfc": "相对湿度（百分比）",
-            "rain01h": "1小时累计降雨量（毫米）",
-            "rain03h": "3小时累计降雨量（毫米）",
-            "rain06h": "6小时累计降雨量（毫米）",
-            "rain24h": "24小时累计降雨量（毫米）",
-            "v": "能见度（公里）",
-            "tracerr01h": "Tracer1小时累计降雨量预报",
-            "maxtofday": "日最高温度（摄氏度）",
-            "rain02h": "2小时累计降雨量（毫米）",
-            "wd3smaxdf": "极大风速（米/秒）",
-            "wd3smaxdd": "极大风向（度）",
-            "crttime": "入库时间",
-            "keyid": "入库序号",
-            # 若已执行 augment 脚本，会存在此列：
-            "recid_int": "记录编号（整数化，用于关联几何网格）",
-        }
-
 
 def get_profile(profile_name: str) -> DatasetProfile:
+    """获取数据集配置"""
     name = (profile_name or "bike").lower()
     if name == "weather_grid":
-        return WeatherGridProfile()
-    return BikeProfile()
+        return WeatherGridProfileV2()
+    return BikeProfileV2()

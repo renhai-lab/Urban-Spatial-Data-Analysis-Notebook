@@ -1,0 +1,21 @@
+name: shenzhen_bike
+services:
+  timescaledb-ha:
+    # TimescaleDB HA镜像（包含PostgreSQL 17 + TimescaleDB + PostGIS）
+    image: timescale/timescaledb-ha:pg17
+    container_name: timescaledb-ha
+    environment:
+      - POSTGRES_DB=shenzhen_bike
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=your_password_here
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescale_ha_data:/var/lib/postgresql/data
+      - ./init_db.sql:/docker-entrypoint-initdb.d/01_init.sql
+    restart: unless-stopped
+
+volumes:
+  timescale_ha_data:
+    driver: local

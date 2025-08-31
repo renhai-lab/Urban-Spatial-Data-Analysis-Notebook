@@ -39,9 +39,28 @@ class Settings(BaseSettings):
     GEOCONV_BATCH_SIZE: int = 100  # geoconv 单次最多100点
     GEOCONV_QPS: int = 30  # geoconv QPS 上限约 30
 
+    # ---- 新增的V2版本配置字段 ----
+    # TimescaleDB配置
+    TS_TUNE_MEMORY: str = "2GB"
+    TS_TUNE_NUM_CPUS: str = "2"
+    ENABLE_TIMESCALE: str = "true"
+    PARTITION_INTERVAL: str = "1 day"
+
+    # 导出配置
+    EXPORT_BASE_DIR: str = "data/share"
+    EXPORT_MAX_WORKERS: str = "4"
+    EXPORT_BATCH_SIZE: str = "50000"
+
+    # 性能配置
+    DB_BATCH_SIZE: str = "10000"
+    BUFFER_SIZE_MB: str = "100"
+    PROGRESS_REPORT_INTERVAL: str = "10"
+    ENABLE_PERFORMANCE_STATS: str = "true"
+
     model_config = {
         "env_file": ".env",  # 相对于项目目录的路径
         "env_file_encoding": "utf-8",
+        "extra": "ignore",  # 忽略额外的环境变量
     }
 
     def get_conn_str(self) -> str:
