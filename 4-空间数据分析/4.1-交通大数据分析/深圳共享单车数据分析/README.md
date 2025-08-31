@@ -2,6 +2,40 @@
 
 本项目聚焦两部分：
 
+- scr/data_pipline：面向"共享单车"和"气象格点"两类数据集的数据获取与入库流水线
+- sql：PostGIS 下的空间表构建、天气格网几何生成、视图与索引脚本
+
+## 项目特色
+
+- *## 获取"全量数据"不建议使用 fetcher-legacy.py 的原因
+
+`scr/data_pipline/fetcher-legacy.py` 为教学/演示用简化脚本，特点是按页追加写 CSV：
+
+- 不做断点续跑、去重与强健重试；异常页会中断或丢失
+- 单线程请求，面对 2.4 亿量级极慢；CSV 体量与 I/O 成本高
+- 无数据库索引与空间类型，后续分析需二次导入
+- 不支持 TimescaleDB 分区，无法应对大规模时序数据
+
+因此：
+
+- **全量与长周期采集**，请使用异步版 `scr/data_pipline/fetcher.py` + TimescaleDB + PostGIS 入库
+- **若仅需"某一天"的样例数据/快速 CSV**，可用 legacy：
+
+```bash
+python scr\data_pipline\fetcher-legacy.py
+# 将 startDate=endDate 设置为目标日期（如 20210101），输出到 data/raw/
+```**：自动分区表按天分区，支持亿级数据高效存储与查询
+- **实时坐标转换**：获取过程中同步完成 GCJ-02 → WGS84 转换，无需后期回填
+- **双坐标系导出**：同时保留原始坐标和 WGS84 坐标，满足不同使用场景
+- **异步高吞吐**：aiohttp + 并发限流，按天并发抓取，自动重试与指数退避
+- **稳健解析**：容错 JSON 解析，自动识别 HTML 降级，跳过异常页，日志可溯源
+- **增量续跑**：启动前查询目标表 MAX(时间列)，从次日接续，避免重复
+- **高效入库**：psycopg COPY 批量写入，geometry(Point,4326) 存储坐标，GIST 空间索引
+- **配置即插拔**：Dataset Profile 抽象，轻松切换 bike / weather_grid 并扩展新数据集
+- **SQL 工程化**：提供天气格点几何构建、字段规范化、索引与视图，便于后续分析数据获取与 PostGIS 分析流水线（适用于深圳市政府开放平台的大部分数据的获取）
+
+本项目聚焦两部分：
+
 - scr/data_pipline：面向“共享单车”和“气象格点”两类数据集的数据获取与入库流水线
 - sql：PostGIS 下的空间表构建、天气格网几何生成、视图与索引脚本
 
@@ -14,17 +48,36 @@
 - 配置即插拔：Dataset Profile 抽象，轻松切换 bike / weather_grid 并扩展新数据集
 - SQL 工程化：提供天气格点几何构建、字段规范化、索引与视图，便于后续分析
 
-## 为什么使用 PostGIS？
+## 为什么使用 PostGIS 和 TimescaleDB？
 
-- 原生空间类型与索引：geometry + GIST，使距离、缓冲、相交等空间运算在亿级规模仍可查询
-- 与 Python/SQL 协同：流水线直接写入空间类型列，SQL 分析即可产出特征与视图，无需反复导出/导入
-- 工程可维护性：表结构、索引、视图作为基础设施明确固化，支持增量和长周期运行
+- **原生空间类型与索引**：geometry + GIST，使距离、缓冲、相交等空间运算在亿级规模仍可查询
+- **时序数据优化**：TimescaleDB 按天自动分区，显著提升大规模时序数据的查询性能
+- **与 Python/SQL 协同**：流水线直接写入空间类型列，SQL 分析即可产出特征与视图，无需反复导出/导入
+- **工程可维护性**：表结构、索引、视图作为基础设施明确固化，支持增量和长周期运行
 
 ## 环境要求
 
 - Python >= 3.13（已提供 pyproject.toml，推荐使用 uv）
-- PostgreSQL 14+（建议 16）
-- PostGIS 扩展
+- PostgreSQL 16+（推荐 17）+ PostGIS 3.5+
+- TimescaleDB 2.17+（建议使用 2.21+ 版本以获得最佳性能）
+
+### Docker 部署（推荐）
+
+使用官方 TimescaleDB + PostGIS 镜像：
+
+```bash
+# 启动 TimescaleDB + PostGIS 容器
+docker run -d \
+  --name timescaledb-postgis \
+  -e POSTGRES_PASSWORD=your_password_here \
+  -e POSTGRES_DB=shenzhen_bike \
+  -p 5432:5432 \
+  timescale/timescaledb-ha:pg17
+
+# 等待启动后连接并创建扩展
+docker exec -it timescaledb-postgis psql -U postgres -d shenzhen_bike -c \
+  "CREATE EXTENSION IF NOT EXISTS timescaledb; CREATE EXTENSION IF NOT EXISTS postgis;"
+```
 
 ## 安装依赖（Python）
 
@@ -33,24 +86,20 @@
 uv sync
 ```
 
-## 安装与启用 PostGIS（Windows）
+## 安装与启用 PostGIS（本机安装）
 
 任选其一：
 
 - 本机安装[（StackBuilder）](https://download.osgeo.org/postgis/windows/)：安装 PostgreSQL 后，打开 StackBuilder 勾选 PostGIS 插件安装；在目标数据库执行：
 
 ```sql
+CREATE EXTENSION IF NOT EXISTS timescaledb;
 CREATE EXTENSION IF NOT EXISTS postgis;
 ```
 
-- Docker 运行（示例）：
+- Docker 运行（见上方 Docker 部署）
 
-```powershell
-docker run -d --name pg-postgis -e POSTGRES_PASSWORD=your_password -p 5432:5432 postgis/postgis:16-3.4
-# 首次连接后在数据库内执行：CREATE EXTENSION postgis;
-```
-
-提示：本项目的初始化程序会尝试执行 CREATE EXTENSION IF NOT EXISTS postgis；如无权限或未安装将记录提醒。
+提示：本项目的初始化程序会尝试执行 CREATE EXTENSION IF NOT EXISTS timescaledb/postgis；如无权限或未安装将记录提醒。
 
 ## 配置（.env）
 
@@ -65,17 +114,19 @@ docker run -d --name pg-postgis -e POSTGRES_PASSWORD=your_password -p 5432:5432 
 - bike（共享单车）
 
   - 表：shenzhen_rides（可通过 TABLE_NAME 覆盖）
+  - **TimescaleDB 分区**：按 start_time 列自动按天分区，支持高效时序查询
   - 列：
     - user_id TEXT, company_id TEXT, start_time TIMESTAMPTZ, end_time TIMESTAMPTZ
-    - start_geom_raw GEOMETRY(Point,4326), end_geom_raw GEOMETRY(Point,4326)
-  - source_crs TEXT（原始坐标系标识，可为空；示例：'GCJ-02'/'WGS-84'/'BD-09'/'UNKNOWN'）
-  - start_geom_wgs84 GEOMETRY(Point,4326), end_geom_wgs84 GEOMETRY(Point,4326)
+    - **原始坐标**：start_geom_raw GEOMETRY(Point,4326), end_geom_raw GEOMETRY(Point,4326)
+    - **WGS84坐标**：start_geom_wgs84 GEOMETRY(Point,4326), end_geom_wgs84 GEOMETRY(Point,4326)
+    - source_crs TEXT（原始坐标系标识；示例：'bd09ll'/'gcj02'/'wgs84'）
   - 索引：
-    - 时间：idx_start_time(start_time)
+    - 时间：idx_start_time(start_time) - TimescaleDB 分区键
     - 空间（raw）：idx_start_geom_raw/idx_end_geom_raw（GIST）
-    - 空间（wgs84）：idx_start_geom_w84/idx_end_geom_w84（GIST）
+    - 空间（wgs84）：idx_start_geom_wgs84/idx_end_geom_wgs84（GIST）
     - 过滤：idx_source_crs(source_crs)
   - 增量列：start_time
+  - **实时坐标转换**：采集时自动完成 BD09LL/GCJ-02 → WGS84 转换
 - weather_grid（深圳范围自动站实况格点）
 
   - 表：sz_weather_grid
@@ -85,18 +136,40 @@ docker run -d --name pg-postgis -e POSTGRES_PASSWORD=your_password -p 5432:5432 
 
 ## 快速运行
 
-```powershell
-# 方式 A：使用 uv 运行
+### 基础数据获取
+
+```bash
+# 方式 A：使用 uv 运行（推荐）
 uv run python -m scr.data_pipline.fetcher
 
 # 方式 B：现有虚拟环境
 .venv\Scripts\python -m scr.data_pipline.fetcher
+
+# 指定日期范围
+uv run python -m scr.data_pipline.fetcher --start 20210101 --end 20210105
+
+# 同时导出双坐标系数据
+uv run python -m scr.data_pipline.fetcher --start 20210101 --end 20210105 \
+  --auto-export --export-coord-sets raw,wgs84 --export-formats csv,geojson
+```
+
+### 导出数据
+
+```bash
+# 导出指定日期范围的数据
+uv run python -m scr.data_pipline.export_share --start 20210101 --end 20210102 \
+  --coord-sets wgs84 --formats csv,geojson --batch 50000 --out data/share
+
+# 同时导出原始坐标和WGS84坐标
+uv run python -m scr.data_pipline.export_share --start 20210101 --end 20210102 \
+  --coord-sets raw,wgs84 --formats csv,geojson --batch 50000 --out data/share
 ```
 
 运行时会：
 
-- 自动初始化目标表与索引（若不存在）
+- 自动初始化 TimescaleDB 分区表与索引（若不存在）
 - 查询数据库中最新日期，按配置范围增量抓取
+- 实时完成坐标转换（BD09LL/GCJ-02 → WGS84）
 - 并发分页请求，批量 COPY 入库
 - 生成日志到控制台与 logs/ 目录
 
@@ -162,50 +235,64 @@ FROM 'data/raw/深圳范围自动站实况格点信息表_2920000903510.csv' CSV
 
 执行顺序建议：create → 导入 CSV → load → augment → views。
 
-## 共享单车表结构迁移与回填（重要）
+## 共享单车表结构说明（重要）
 
-如果之前已用旧列（start_geom/end_geom）入库，请按以下步骤迁移：
+新版本数据管道采用以下优化设计：
 
-1) 迁移表结构并拷贝旧数据
+### 表结构特性
 
-```sql
-\i sql/migrate_shenzhen_rides_schema.sql
-```
+1. **TimescaleDB 分区**：自动按 `start_time` 列按天分区，提升大数据查询性能
+2. **双坐标系存储**：同时保存原始坐标和 WGS84 坐标
+3. **实时坐标转换**：采集过程中自动完成坐标系转换，无需后期回填
 
-脚本会：
-
-- 添加 start_geom_raw/end_geom_raw/source_crs/start_geom_wgs84/end_geom_wgs84 列；
-- 将旧的 start_geom/end_geom 拷贝到 raw 与 wgs84 对应列；
-- 建立推荐索引；可选移除旧的空间索引（避免混淆）。
-
-1) 批量回填 *_wgs84（当你仅写 raw 且原始为 GCJ-02 时）
-
-```powershell
-# 干跑：仅统计待更新行数
-uv run python -m scr.data_pipline.backfill_wgs84_from_raw --start 20210101 --end 20210830 --limit 200000 --dry-run true
-
-# 实际写入（先小范围验证再全量）
-uv run python -m scr.data_pipline.backfill_wgs84_from_raw --start 20210101 --end 20210830 --limit 200000 --dry-run false
-```
-
-注意：
-
-- 回填脚本默认使用本地 GCJ-02 → WGS84（eviltransform）。其它坐标对请用 `coords.batch_convert` + 百度 geoconv API。
-- 回填不会自动写 source_crs；待你核验后，可用 SQL 按日期范围标记：
+### 核心字段
 
 ```sql
-UPDATE public.shenzhen_rides
-SET source_crs = 'GCJ-02'
-WHERE (start_time AT TIME ZONE 'Asia/Shanghai')::date BETWEEN '2021-01-01' AND '2021-08-30';
+CREATE TABLE shenzhen_rides (
+    id BIGSERIAL,
+    user_id TEXT,
+    company_id TEXT,
+    start_time TIMESTAMPTZ,
+    end_time TIMESTAMPTZ,
+    -- 原始坐标（BD09LL/GCJ-02等）
+    start_geom_raw GEOMETRY(Point,4326),
+    end_geom_raw GEOMETRY(Point,4326),
+    -- WGS84坐标（实时转换）
+    start_geom_wgs84 GEOMETRY(Point,4326),
+    end_geom_wgs84 GEOMETRY(Point,4326),
+    -- 坐标系标识
+    source_crs TEXT,
+    PRIMARY KEY (id, start_time)  -- TimescaleDB 复合主键
+);
+
+-- 创建 TimescaleDB 超表
+SELECT create_hypertable('shenzhen_rides', 'start_time', 
+                        chunk_time_interval => INTERVAL '1 day');
 ```
 
-1) 入库行为（新）
+### 索引策略
 
-采集脚本只写 start_geom_raw/end_geom_raw；不做坐标转换与判断；source_crs 置空。分析前请批量生成 *_wgs84。
+```sql
+-- 时间索引（分区键）
+CREATE INDEX IF NOT EXISTS idx_shenzhen_rides_start_time 
+ON shenzhen_rides (start_time);
 
-1) 导出兼容
+-- 空间索引（原始坐标）
+CREATE INDEX IF NOT EXISTS idx_shenzhen_rides_start_geom_raw 
+ON shenzhen_rides USING GIST (start_geom_raw);
+CREATE INDEX IF NOT EXISTS idx_shenzhen_rides_end_geom_raw 
+ON shenzhen_rides USING GIST (end_geom_raw);
 
-`export_bike_json.py` 优先读取 `start_geom_wgs84`，若为空则回退到旧列 `start_geom`，确保历史数据仍可导出。
+-- 空间索引（WGS84坐标）
+CREATE INDEX IF NOT EXISTS idx_shenzhen_rides_start_geom_wgs84 
+ON shenzhen_rides USING GIST (start_geom_wgs84);
+CREATE INDEX IF NOT EXISTS idx_shenzhen_rides_end_geom_wgs84 
+ON shenzhen_rides USING GIST (end_geom_wgs84);
+
+-- 过滤索引
+CREATE INDEX IF NOT EXISTS idx_shenzhen_rides_source_crs 
+ON shenzhen_rides (source_crs);
+```
 
 ## 示例特征视图（共享单车）
 

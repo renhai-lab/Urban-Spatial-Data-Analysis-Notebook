@@ -7,5 +7,8 @@ __pycache__/
 logs/
 
 data/raw/
+data/share/raw
+data/share/wgs84
+data/test_export
 .idea
 viz/
