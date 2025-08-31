@@ -39,7 +39,6 @@ class Settings(BaseSettings):
     GEOCONV_BATCH_SIZE: int = 100  # geoconv 单次最多100点
     GEOCONV_QPS: int = 30  # geoconv QPS 上限约 30
 
-    # ---- 新增的V2版本配置字段 ----
     # TimescaleDB配置
     TS_TUNE_MEMORY: str = "2GB"
     TS_TUNE_NUM_CPUS: str = "2"

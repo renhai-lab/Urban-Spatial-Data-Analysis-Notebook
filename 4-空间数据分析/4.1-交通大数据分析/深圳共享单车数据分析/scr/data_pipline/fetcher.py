@@ -49,7 +49,7 @@ def is_empty_data(obj) -> bool:
     return True
 
 
-async def fetch_page_v2(
+async def fetch_page(
     session, page_num, target_date, semaphore, profile: DatasetProfile
 ):
     """
@@ -188,7 +188,7 @@ async def fetch_day(
     total_conversion_errors = 0
 
     # 首先获取第一页以确定总数
-    first_page_result = await fetch_page_v2(session, 1, target_date, semaphore, profile)
+    first_page_result = await fetch_page(session, 1, target_date, semaphore, profile)
     if first_page_result is None:
         logger.error(f"{target_date} 第一页获取失败")
         return None, {"error": "第一页获取失败"}
@@ -213,7 +213,7 @@ async def fetch_day(
         # 并发获取剩余页面
         tasks = []
         for page_num in range(2, total_pages + 1):
-            task = fetch_page_v2(session, page_num, target_date, semaphore, profile)
+            task = fetch_page(session, page_num, target_date, semaphore, profile)
             tasks.append(task)
 
         if tasks:
@@ -275,7 +275,7 @@ async def bulk_insert(conn_str: str, profile: DatasetProfile, records: list):
         return 0
 
 
-async def process_date_range_v2(
+async def process_date_range(
     profile: DatasetProfile,
     start_date: date,
     end_date: date,
@@ -366,7 +366,7 @@ async def process_date_range_v2(
     return total_stats
 
 
-def main_v2():
+def main():
     """主程序入口"""
     ap = argparse.ArgumentParser(description="优化版本的数据获取程序")
     ap.add_argument(
@@ -409,7 +409,7 @@ def main_v2():
     # 创建日志目录
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
-    log_file = log_dir / f"fetch_v2_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    log_file = log_dir / f"fetch_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
     logger.add(
         log_file,
         level="DEBUG",
@@ -462,7 +462,7 @@ def main_v2():
 
     # 运行主程序
     stats = asyncio.run(
-        process_date_range_v2(
+        process_date_range(
             profile=profile,
             start_date=start_date,
             end_date=end_date,
@@ -477,4 +477,4 @@ def main_v2():
 
 
 if __name__ == "__main__":
-    main_v2()
+    main()

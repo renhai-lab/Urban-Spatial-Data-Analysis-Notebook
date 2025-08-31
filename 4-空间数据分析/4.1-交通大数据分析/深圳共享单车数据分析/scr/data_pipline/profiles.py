@@ -48,7 +48,7 @@ class DatasetProfile:
         """返回TimescaleDB设置SQL"""
         if not self.enable_timescale:
             return ""
-        
+
         return f"""
         -- 创建hypertable（如果尚未创建）
         SELECT create_hypertable('{self.table_name}', '{self.partition_column}', 
@@ -57,22 +57,22 @@ class DatasetProfile:
         """
 
 
-class BikeProfileV2(DatasetProfile):
+class BikeProfile(DatasetProfile):
     """优化版本的共享单车配置：实时转换坐标，简化表结构"""
-    
+
     def __init__(self):
         super().__init__(
-            name="bike_v2",
+            name="bike",
             api_url=settings.API_URL,
             table_name=settings.TABLE_NAME,  # 直接使用配置中的表名
             copy_columns=[
                 "user_id",
-                "company_id", 
+                "company_id",
                 "start_time",
                 "end_time",
-                "start_geom_raw",     # 保留原始坐标
+                "start_geom_raw",  # 保留原始坐标
                 "end_geom_raw",
-                "start_geom_wgs84",   # 转换后的WGS84坐标
+                "start_geom_wgs84",  # 转换后的WGS84坐标
                 "end_geom_wgs84",
                 "source_crs",
             ],
@@ -93,32 +93,30 @@ class BikeProfileV2(DatasetProfile):
             PRIMARY KEY (id, start_time)
             """,
             indexes=[
-                IndexSpec(name="idx_start_time_v2", columns_sql="start_time"),
-                IndexSpec(name="idx_company_id_v2", columns_sql="company_id"),
+                IndexSpec(name="idx_start_time", columns_sql="start_time"),
+                IndexSpec(name="idx_company_id", columns_sql="company_id"),
                 # 原始坐标空间索引
                 IndexSpec(
-                    name="idx_start_geom_raw_v2",
+                    name="idx_start_geom_raw",
                     columns_sql="start_geom_raw",
                     using="GIST",
                 ),
                 IndexSpec(
-                    name="idx_end_geom_raw_v2", 
-                    columns_sql="end_geom_raw", 
-                    using="GIST"
+                    name="idx_end_geom_raw", columns_sql="end_geom_raw", using="GIST"
                 ),
                 # WGS84坐标空间索引
                 IndexSpec(
-                    name="idx_start_geom_wgs84_v2",
+                    name="idx_start_geom_wgs84",
                     columns_sql="start_geom_wgs84",
                     using="GIST",
                 ),
                 IndexSpec(
-                    name="idx_end_geom_wgs84_v2", 
-                    columns_sql="end_geom_wgs84", 
-                    using="GIST"
+                    name="idx_end_geom_wgs84",
+                    columns_sql="end_geom_wgs84",
+                    using="GIST",
                 ),
                 # 原始坐标系标识索引
-                IndexSpec(name="idx_source_crs_v2", columns_sql="source_crs"),
+                IndexSpec(name="idx_source_crs", columns_sql="source_crs"),
             ],
             latest_date_column="start_time",
             enable_timescale=True,
@@ -132,7 +130,9 @@ class BikeProfileV2(DatasetProfile):
         end_time_utc = parse_dt_beijing(record.get("END_TIME"))
 
         # 获取原始坐标
-        slon, slat = to_float(record.get("START_LNG")), to_float(record.get("START_LAT"))
+        slon, slat = to_float(record.get("START_LNG")), to_float(
+            record.get("START_LAT")
+        )
         elon, elat = to_float(record.get("END_LNG")), to_float(record.get("END_LAT"))
 
         # 原始坐标WKT
@@ -168,17 +168,17 @@ class BikeProfileV2(DatasetProfile):
             record.get("COM_ID"),
             start_time_utc,
             end_time_utc,
-            start_geom_raw_wkt,    # start_geom_raw
-            end_geom_raw_wkt,      # end_geom_raw
+            start_geom_raw_wkt,  # start_geom_raw
+            end_geom_raw_wkt,  # end_geom_raw
             start_geom_wgs84_wkt,  # start_geom_wgs84
-            end_geom_wgs84_wkt,    # end_geom_wgs84
-            "GCJ-02",              # source_crs，默认假设原始数据为GCJ-02
+            end_geom_wgs84_wkt,  # end_geom_wgs84
+            "GCJ-02",  # source_crs，默认假设原始数据为GCJ-02
         )
 
     def field_labels(self) -> Dict[str, str]:
         return {
             "id": "自增主键",
-            "user_id": "用户ID", 
+            "user_id": "用户ID",
             "company_id": "企业ID",
             "start_time": "开始时间",
             "end_time": "结束时间",
@@ -190,19 +190,38 @@ class BikeProfileV2(DatasetProfile):
         }
 
 
-class WeatherGridProfileV2(DatasetProfile):
+class WeatherGridProfile(DatasetProfile):
     """天气格点数据配置（已优化）"""
-    
+
     def __init__(self):
         super().__init__(
-            name="weather_grid_v2",
+            name="weather_grid",
             api_url="https://opendata.sz.gov.cn/api/29200_00903509/1/service.xhtml",
-            table_name="sz_weather_grid_v2",
+            table_name="sz_weather_grid",
             copy_columns=[
-                "recid", "ddatetime", "gridid", "ybsx", "forecasttime", "plevel",
-                "t", "wspd", "wdir", "slp", "rhsfc", "rain01h", "rain03h", 
-                "rain06h", "rain24h", "v", "tracerr01h", "maxtofday", "rain02h",
-                "wd3smaxdf", "wd3smaxdd", "crttime", "keyid",
+                "recid",
+                "ddatetime",
+                "gridid",
+                "ybsx",
+                "forecasttime",
+                "plevel",
+                "t",
+                "wspd",
+                "wdir",
+                "slp",
+                "rhsfc",
+                "rain01h",
+                "rain03h",
+                "rain06h",
+                "rain24h",
+                "v",
+                "tracerr01h",
+                "maxtofday",
+                "rain02h",
+                "wd3smaxdf",
+                "wd3smaxdd",
+                "crttime",
+                "keyid",
             ],
             table_columns_sql="""
             id BIGSERIAL PRIMARY KEY,
@@ -231,9 +250,9 @@ class WeatherGridProfileV2(DatasetProfile):
             keyid TEXT
             """,
             indexes=[
-                IndexSpec(name="idx_wg_v2_crttime", columns_sql="crttime"),
-                IndexSpec(name="idx_wg_v2_ddatetime", columns_sql="ddatetime"),
-                IndexSpec(name="idx_wg_v2_gridid", columns_sql="gridid"),
+                IndexSpec(name="idx_wg_crttime", columns_sql="crttime"),
+                IndexSpec(name="idx_wg_ddatetime", columns_sql="ddatetime"),
+                IndexSpec(name="idx_wg_gridid", columns_sql="gridid"),
             ],
             latest_date_column="crttime",
             enable_timescale=True,
@@ -273,5 +292,5 @@ def get_profile(profile_name: str) -> DatasetProfile:
     """获取数据集配置"""
     name = (profile_name or "bike").lower()
     if name == "weather_grid":
-        return WeatherGridProfileV2()
-    return BikeProfileV2()
+        return WeatherGridProfile()
+    return BikeProfile()
