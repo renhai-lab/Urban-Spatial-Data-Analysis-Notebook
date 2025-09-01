@@ -24,6 +24,8 @@ default = true
 
 [dependency-groups]
 dev = [
+    "ijson>=3.4.0",
+    "matplotlib>=3.10.6",
     "notebook>=7.4.5",
     "pyogrio>=0.11.1",
     "pyproj>=3.7.2",

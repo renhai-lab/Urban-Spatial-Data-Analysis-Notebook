@@ -1,9 +1,12 @@
 """
-优化版本的数据获取程序，集成：
+最终版数据获取程序，集成：
 1. TimescaleDB分区
 2. 实时坐标转换（GCJ-02 -> WGS84）
 3. 按天导出功能
-4. 更高效的数据处理流程
+4. 内存优化管理
+5. 原子性数据处理
+6. 智能缺失日期检测和补全
+7. 数据完整性验证
 """
 
 import asyncio
@@ -11,6 +14,10 @@ import argparse
 from pathlib import Path
 import sys
 from datetime import datetime, timedelta, timezone, date
+import gc
+import psutil
+import os
+from typing import List, Set, Dict, Optional
 
 import aiohttp
 import json
@@ -32,6 +39,156 @@ if sys.platform.startswith("win") and hasattr(
     asyncio, "WindowsSelectorEventLoopPolicy"
 ):
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+
+def get_memory_usage():
+    """获取当前进程的内存使用情况（MB）"""
+    process = psutil.Process(os.getpid())
+    return process.memory_info().rss / 1024 / 1024
+
+
+async def get_missing_dates(
+    conn_str: str, profile: DatasetProfile, start_date: date, end_date: date
+) -> List[date]:
+    """
+    检测指定日期范围内数据库中缺失的日期
+    返回没有数据的日期列表
+    """
+    missing_dates = []
+
+    try:
+        async with await psycopg.AsyncConnection.connect(
+            conn_str, connect_timeout=settings.CONNECT_TIMEOUT
+        ) as aconn:
+            async with aconn.cursor() as acur:
+                # 生成日期序列并检查每天的数据量
+                query = sql.SQL(
+                    """
+                    WITH days AS (
+                        SELECT generate_series(%(start)s::date, %(end)s::date, interval '1 day')::date AS day
+                    ), counts AS (
+                        SELECT (({day_col} AT TIME ZONE 'Asia/Shanghai')::date) AS day,
+                               COUNT(*)::bigint AS cnt
+                        FROM {table}
+                        WHERE ({day_col} AT TIME ZONE 'Asia/Shanghai')::date BETWEEN %(start)s::date AND %(end)s::date
+                        GROUP BY 1
+                    )
+                    SELECT d.day, COALESCE(c.cnt, 0) AS cnt
+                    FROM days d
+                    LEFT JOIN counts c ON c.day = d.day
+                    ORDER BY d.day;
+                """
+                ).format(
+                    day_col=sql.Identifier(profile.latest_date_column),
+                    table=sql.Identifier(profile.table_name),
+                )
+
+                await acur.execute(query, {"start": start_date, "end": end_date})
+
+                rows = await acur.fetchall()
+
+                for day, cnt in rows:
+                    if cnt == 0:  # 没有数据的日期
+                        missing_dates.append(day)
+
+                if missing_dates:
+                    logger.info(
+                        f"检测到 {len(missing_dates)} 个缺失日期: {[d.strftime('%Y-%m-%d') for d in missing_dates[:5]]}{'...' if len(missing_dates) > 5 else ''}"
+                    )
+                else:
+                    logger.info("未检测到缺失日期")
+                return missing_dates
+
+    except Exception as e:
+        logger.error(f"检测缺失日期时发生错误: {e}")
+        # 如果检测失败，返回完整的日期范围
+        dates = []
+        current = start_date
+        while current <= end_date:
+            dates.append(current)
+            current += timedelta(days=1)
+        return dates
+
+
+async def verify_day_completeness(
+    conn_str: str,
+    profile: DatasetProfile,
+    target_date: date,
+    expected_count: Optional[int] = None,
+) -> bool:
+    """
+    验证指定日期的数据是否完整
+    如果提供了期望数量，则检查实际数量是否匹配
+    """
+    try:
+        async with await psycopg.AsyncConnection.connect(
+            conn_str, connect_timeout=settings.CONNECT_TIMEOUT
+        ) as aconn:
+            async with aconn.cursor() as acur:
+                query = sql.SQL(
+                    """
+                    SELECT COUNT(*) 
+                    FROM {table} 
+                    WHERE ({day_col} AT TIME ZONE 'Asia/Shanghai')::date = %(target_date)s
+                """
+                ).format(
+                    table=sql.Identifier(profile.table_name),
+                    day_col=sql.Identifier(profile.latest_date_column),
+                )
+
+                await acur.execute(query, {"target_date": target_date})
+                result = await acur.fetchone()
+                actual_count = result[0] if result else 0
+
+                if expected_count is not None:
+                    is_complete = actual_count == expected_count
+                    if not is_complete:
+                        logger.warning(
+                            f"{target_date} 数据不完整: 期望 {expected_count}，实际 {actual_count}"
+                        )
+                    return is_complete
+                else:
+                    # 如果没有期望数量，只要有数据就认为是完整的
+                    return actual_count > 0
+
+    except Exception as e:
+        logger.error(f"验证 {target_date} 数据完整性时发生错误: {e}")
+        return False
+
+
+async def delete_incomplete_day_data(
+    conn_str: str, profile: DatasetProfile, target_date: date
+) -> bool:
+    """
+    删除指定日期的不完整数据，为重新获取做准备
+    """
+    try:
+        async with await psycopg.AsyncConnection.connect(
+            conn_str, connect_timeout=settings.CONNECT_TIMEOUT
+        ) as aconn:
+            async with aconn.cursor() as acur:
+                delete_query = sql.SQL(
+                    """
+                    DELETE FROM {table} 
+                    WHERE ({day_col} AT TIME ZONE 'Asia/Shanghai')::date = %(target_date)s
+                """
+                ).format(
+                    table=sql.Identifier(profile.table_name),
+                    day_col=sql.Identifier(profile.latest_date_column),
+                )
+
+                await acur.execute(delete_query, {"target_date": target_date})
+                deleted_count = acur.rowcount
+                await aconn.commit()
+
+                if deleted_count > 0:
+                    logger.info(f"已删除 {target_date} 的 {deleted_count} 条不完整数据")
+
+                return True
+
+    except Exception as e:
+        logger.error(f"删除 {target_date} 不完整数据时发生错误: {e}")
+        return False
 
 
 def is_empty_data(obj) -> bool:
@@ -67,8 +224,6 @@ async def fetch_page(
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
         "Accept": "application/json, text/javascript, */*; q=0.01",
     }
-
-    # logger.debug(f"请求参数: {params}，请求url：{profile.api_url}")
 
     for attempt in range(settings.MAX_RETRIES):
         try:
@@ -177,12 +332,15 @@ async def fetch_page(
     return None
 
 
-async def fetch_day(
+async def fetch_day_optimized(
     session, target_date, profile: DatasetProfile, max_concurrency: int = 5
 ):
-    """获取单天数据"""
+    """
+    优化版获取单天数据
+    - 内存优化：分批处理页面
+    - 数据完整性：验证获取数量
+    """
     semaphore = asyncio.Semaphore(max_concurrency)
-    all_records = []
     expected_total = None
     total_conversion_errors = 0
 
@@ -197,9 +355,11 @@ async def fetch_day(
     total_conversion_errors += first_page_meta.get("conversion_errors", 0)
 
     if expected_total == 0:
-        logger.info(f"{target_date} 无数据")
+        logger.info(f"{target_date} API 返回无数据")
         return [], {"expected_total": 0, "actual_total": 0}
 
+    # 收集所有数据
+    all_records = []
     all_records.extend(first_page_data)
 
     if expected_total and expected_total > settings.ROWS_PER_PAGE:
@@ -209,25 +369,42 @@ async def fetch_day(
         ) // settings.ROWS_PER_PAGE
         logger.info(f"{target_date} 预计 {expected_total} 条记录，{total_pages} 页")
 
-        # 并发获取剩余页面
-        tasks = []
-        for page_num in range(2, total_pages + 1):
-            task = fetch_page(session, page_num, target_date, semaphore, profile)
-            tasks.append(task)
+        # 分批获取剩余页面，控制内存使用
+        batch_size = 10  # 每批处理10页
 
-        if tasks:
-            progress_desc = f"获取 {target_date}"
-            results = await tqdm.gather(*tasks, desc=progress_desc)
+        for batch_start in range(2, total_pages + 1, batch_size):
+            batch_end = min(batch_start + batch_size, total_pages + 1)
 
-            for result in results:
-                if result is not None:
-                    page_data, page_meta = result
-                    all_records.extend(page_data)
-                    total_conversion_errors += page_meta.get("conversion_errors", 0)
+            # 并发获取当前批次的页面
+            tasks = []
+            for page_num in range(batch_start, batch_end):
+                task = fetch_page(session, page_num, target_date, semaphore, profile)
+                tasks.append(task)
+
+            if tasks:
+                progress_desc = f"获取 {target_date} 第{batch_start}-{batch_end-1}页"
+                results = await tqdm.gather(*tasks, desc=progress_desc)
+
+                for result in results:
+                    if result is not None:
+                        page_data, page_meta = result
+                        all_records.extend(page_data)
+                        total_conversion_errors += page_meta.get("conversion_errors", 0)
+
+                # 清理当前批次的内存
+                del tasks, results
+                gc.collect()
+
+    # 验证数据完整性
+    actual_total = len(all_records)
+    if expected_total and actual_total != expected_total:
+        logger.warning(
+            f"{target_date} 数据可能不完整: API显示 {expected_total}，实际获取 {actual_total}"
+        )
 
     stats = {
         "expected_total": expected_total,
-        "actual_total": len(all_records),
+        "actual_total": actual_total,
         "conversion_errors": total_conversion_errors,
     }
 
@@ -272,113 +449,22 @@ async def bulk_insert(conn_str: str, profile: DatasetProfile, records: list):
                     await aconn.commit()
                     inserted_total += len(batch)
                     pct = inserted_total * 100 / total
+
+                    # 记录内存使用情况
+                    memory_mb = get_memory_usage()
                     logger.info(
-                        f"COPY 进度: {inserted_total:,}/{total:,} ({pct:.1f}%) 已提交 -> {profile.table_name}"
+                        f"COPY 进度: {inserted_total:,}/{total:,} ({pct:.1f}%) "
+                        f"已提交 -> {profile.table_name}, 内存: {memory_mb:.1f}MB"
                     )
 
     except Exception as e:
-        logger.error(
-            f"批量插入失败: {e}（已提交 {inserted_total:,}/{total:,}）"
-        )
+        logger.error(f"批量插入失败: {e}（已提交 {inserted_total:,}/{total:,}）")
         return inserted_total
 
     logger.success(
         f"成功提交 {inserted_total:,}/{total:,} 条记录到 {profile.table_name}"
     )
     return inserted_total
-
-
-async def process_date_range(
-    profile: DatasetProfile,
-    start_date: date,
-    end_date: date,
-    auto_export: bool = True,
-    export_coord_sets: list = ["raw", "wgs84"],
-    export_formats: list = ["csv", "geojson"],
-):
-    """处理日期范围内的数据，实现流水线式处理：获取完即导出"""
-    conn_str = settings.get_conn_str()
-
-    # 设置数据库
-    await setup_database(conn_str, profile)
-
-    # 生成日期列表
-    dates = []
-    current = start_date
-    while current <= end_date:
-        dates.append(current)
-        current += timedelta(days=1)
-
-    total_stats = {
-        "total_days": len(dates),
-        "successful_days": 0,
-        "total_records": 0,
-        "total_conversion_errors": 0,
-        "exported_days": 0,
-    }
-
-    logger.info(
-        f"开始流水线处理 {len(dates)} 天数据，最大并发天数: {settings.DAYS_CONCURRENCY}"
-    )
-
-    # 创建信号量来控制并发数
-    fetch_semaphore = asyncio.Semaphore(settings.DAYS_CONCURRENCY)
-    export_semaphore = asyncio.Semaphore(settings.EXPORT_MAX_WORKERS)
-
-    async with aiohttp.ClientSession(
-        timeout=aiohttp.ClientTimeout(total=60)
-    ) as session:
-
-        # 创建所有日期的处理任务
-        tasks = []
-        for target_date in dates:
-            task = process_single_day_pipeline(
-                session=session,
-                target_date=target_date,
-                profile=profile,
-                conn_str=conn_str,
-                auto_export=auto_export,
-                export_coord_sets=export_coord_sets,
-                export_formats=export_formats,
-                fetch_semaphore=fetch_semaphore,
-                export_semaphore=export_semaphore,
-            )
-            tasks.append(task)
-
-        # 并发执行所有任务，每个任务内部是流水线式的
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # 统计结果
-        for target_date, result in zip(dates, results):
-            try:
-                if isinstance(result, Exception):
-                    logger.error(f"{target_date} 处理失败: {result}")
-                    continue
-
-                if not isinstance(result, dict):
-                    logger.error(f"{target_date} 返回结果格式错误: {result}")
-                    continue
-
-                if result.get("success", False):
-                    total_stats["successful_days"] += 1
-                    total_stats["total_records"] += result.get("records_count", 0)
-                    total_stats["total_conversion_errors"] += result.get(
-                        "conversion_errors", 0
-                    )
-                    if result.get("exported", False):
-                        total_stats["exported_days"] += 1
-
-            except Exception as e:
-                logger.error(f"处理 {target_date} 结果时发生错误: {e}")
-
-    logger.success(
-        f"流水线处理完成！成功: {total_stats['successful_days']}/{total_stats['total_days']} 天，"
-        f"总记录: {total_stats['total_records']:,}，"
-        f"坐标转换错误: {total_stats['total_conversion_errors']:,}，"
-        f"导出: {total_stats['exported_days']} 天"
-    )
-
-    return total_stats
 
 
 async def process_single_day_pipeline(
@@ -391,23 +477,35 @@ async def process_single_day_pipeline(
     export_formats: list,
     fetch_semaphore: asyncio.Semaphore,
     export_semaphore: asyncio.Semaphore,
+    atomic_mode: bool = False,
 ):
-    """处理单天数据的完整流水线：获取->入库->导出"""
-
+    """
+    处理单天数据的完整流水线
+    atomic_mode: 是否启用原子性模式（确保数据完整性）
+    """
     result = {
         "success": False,
         "records_count": 0,
         "conversion_errors": 0,
         "exported": False,
+        "date": target_date,
     }
 
     try:
         # 控制并发获取数据
         async with fetch_semaphore:
-            logger.info(f"开始获取 {target_date} 数据")
+            memory_before = get_memory_usage()
+            logger.info(f"开始处理 {target_date} 数据，内存: {memory_before:.1f}MB")
+
+            # 原子性模式：检查并清理已有数据
+            if atomic_mode:
+                has_data = await verify_day_completeness(conn_str, profile, target_date)
+                if has_data:
+                    logger.info(f"{target_date} 发现已有数据，为确保完整性将重新获取")
+                    await delete_incomplete_day_data(conn_str, profile, target_date)
 
             # 获取数据
-            records, stats = await fetch_day(
+            records, stats = await fetch_day_optimized(
                 session, target_date, profile, settings.MAX_CONCURRENCY
             )
 
@@ -420,19 +518,42 @@ async def process_single_day_pipeline(
                 result["success"] = True
                 return result
 
-            logger.success(f"{target_date} 获取完成：{len(records)} 条记录")
+            memory_after_fetch = get_memory_usage()
+            logger.success(
+                f"{target_date} 获取完成：{len(records)} 条记录，"
+                f"内存: {memory_after_fetch:.1f}MB (+{memory_after_fetch - memory_before:.1f}MB)"
+            )
             result["records_count"] = len(records)
             result["conversion_errors"] = stats.get("conversion_errors", 0)
 
-        # 入库操作（不在信号量控制内，因为数据库连接有自己的池管理）
+        # 入库操作
         logger.info(f"开始入库 {target_date} 数据")
         inserted = await bulk_insert(conn_str, profile, records)
 
         if inserted > 0:
+            # 原子性模式：验证入库完整性
+            if atomic_mode:
+                expected_count = stats.get("expected_total")
+                if expected_count is None:
+                    expected_count = len(records)
+                elif isinstance(expected_count, str):
+                    try:
+                        expected_count = int(expected_count)
+                    except ValueError:
+                        expected_count = len(records)
+
+                is_complete = await verify_day_completeness(
+                    conn_str, profile, target_date, expected_count
+                )
+                if not is_complete:
+                    logger.error(f"{target_date} 入库验证失败，删除不完整数据")
+                    await delete_incomplete_day_data(conn_str, profile, target_date)
+                    return result
+
             logger.success(f"{target_date} 入库完成：{inserted} 条记录")
             result["success"] = True
 
-            # 导出操作（获取完数据就立即开始，不等待其他天）
+            # 导出操作
             if auto_export:
                 async with export_semaphore:
                     logger.info(f"开始导出 {target_date} 数据")
@@ -458,20 +579,196 @@ async def process_single_day_pipeline(
         else:
             logger.warning(f"{target_date} 入库失败")
 
+        # 及时释放内存
+        del records, stats
+        gc.collect()
+
+        final_memory = get_memory_usage()
+        logger.debug(f"{target_date} 处理完成，最终内存: {final_memory:.1f}MB")
+
     except Exception as e:
         logger.error(f"处理 {target_date} 时发生错误: {e}")
+        # 原子性模式下清理可能的不完整数据
+        if atomic_mode:
+            try:
+                await delete_incomplete_day_data(conn_str, profile, target_date)
+            except:
+                pass
 
     return result
 
 
+async def process_date_range(
+    profile: DatasetProfile,
+    start_date: date,
+    end_date: date,
+    auto_export: bool = True,
+    export_coord_sets: list = ["raw", "wgs84"],
+    export_formats: list = ["csv", "geojson"],
+    missing_only: bool = False,
+    atomic_mode: bool = False,
+    max_concurrent_days: Optional[int] = None,
+):
+    """
+    处理日期范围内的数据
+    missing_only: 只处理缺失的日期
+    atomic_mode: 原子性模式，确保数据完整性
+    max_concurrent_days: 最大并发天数
+    """
+    conn_str = settings.get_conn_str()
+
+    # 设置数据库
+    await setup_database(conn_str, profile)
+
+    # 使用配置的并发天数，如果没有提供的话
+    if max_concurrent_days is None:
+        max_concurrent_days = settings.DAYS_CONCURRENCY
+
+    # 根据模式确定要处理的日期
+    if missing_only:
+        # 只处理缺失的日期
+        dates = await get_missing_dates(conn_str, profile, start_date, end_date)
+        if not dates:
+            logger.info("没有缺失的日期需要处理")
+            return {
+                "total_days": 0,
+                "successful_days": 0,
+                "total_records": 0,
+                "total_conversion_errors": 0,
+                "exported_days": 0,
+            }
+        logger.info(f"将处理 {len(dates)} 个缺失日期")
+    else:
+        # 生成完整日期列表
+        dates = []
+        current = start_date
+        while current <= end_date:
+            dates.append(current)
+            current += timedelta(days=1)
+        logger.info(f"将处理完整日期范围：{len(dates)} 天")
+
+    total_stats = {
+        "total_days": len(dates),
+        "successful_days": 0,
+        "total_records": 0,
+        "total_conversion_errors": 0,
+        "exported_days": 0,
+        "failed_days": [],
+    }
+
+    mode_desc = "原子性" if atomic_mode else "标准"
+    logger.info(
+        f"开始{mode_desc}处理 {len(dates)} 天数据，最大并发天数: {max_concurrent_days}"
+    )
+
+    async with aiohttp.ClientSession(
+        timeout=aiohttp.ClientTimeout(total=60)
+    ) as session:
+
+        # 分批处理日期，避免内存爆炸
+        for batch_start in range(0, len(dates), max_concurrent_days):
+            batch_end = min(batch_start + max_concurrent_days, len(dates))
+            batch_dates = dates[batch_start:batch_end]
+
+            memory_before = get_memory_usage()
+            logger.info(
+                f"处理批次: {batch_dates[0]} 到 {batch_dates[-1]}，"
+                f"处理前内存: {memory_before:.1f}MB"
+            )
+
+            # 创建信号量来控制并发数
+            fetch_semaphore = asyncio.Semaphore(settings.DAYS_CONCURRENCY)
+            export_semaphore = asyncio.Semaphore(settings.EXPORT_MAX_WORKERS)
+
+            # 创建当前批次的处理任务
+            tasks = []
+            for target_date in batch_dates:
+                task = process_single_day_pipeline(
+                    session=session,
+                    target_date=target_date,
+                    profile=profile,
+                    conn_str=conn_str,
+                    auto_export=auto_export,
+                    export_coord_sets=export_coord_sets,
+                    export_formats=export_formats,
+                    fetch_semaphore=fetch_semaphore,
+                    export_semaphore=export_semaphore,
+                    atomic_mode=atomic_mode,
+                )
+                tasks.append(task)
+
+            # 并发执行当前批次的任务
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # 统计当前批次结果
+            for target_date, result in zip(batch_dates, results):
+                try:
+                    if isinstance(result, Exception):
+                        logger.error(f"{target_date} 处理失败: {result}")
+                        total_stats["failed_days"].append(
+                            target_date.strftime("%Y-%m-%d")
+                        )
+                        continue
+
+                    if not isinstance(result, dict):
+                        logger.error(f"{target_date} 返回结果格式错误: {result}")
+                        total_stats["failed_days"].append(
+                            target_date.strftime("%Y-%m-%d")
+                        )
+                        continue
+
+                    if result.get("success", False):
+                        total_stats["successful_days"] += 1
+                        total_stats["total_records"] += result.get("records_count", 0)
+                        total_stats["total_conversion_errors"] += result.get(
+                            "conversion_errors", 0
+                        )
+                        if result.get("exported", False):
+                            total_stats["exported_days"] += 1
+                    else:
+                        total_stats["failed_days"].append(
+                            target_date.strftime("%Y-%m-%d")
+                        )
+
+                except Exception as e:
+                    logger.error(f"处理 {target_date} 结果时发生错误: {e}")
+                    total_stats["failed_days"].append(target_date.strftime("%Y-%m-%d"))
+
+            # 强制垃圾回收，释放当前批次的内存
+            del tasks, results
+            gc.collect()
+
+            memory_after = get_memory_usage()
+            logger.info(
+                f"批次处理完成，处理后内存: {memory_after:.1f}MB，"
+                f"内存变化: {memory_after - memory_before:+.1f}MB"
+            )
+
+    logger.success(
+        f"{mode_desc}处理完成！成功: {total_stats['successful_days']}/{total_stats['total_days']} 天，"
+        f"总记录: {total_stats['total_records']:,}，"
+        f"坐标转换错误: {total_stats['total_conversion_errors']:,}，"
+        f"导出: {total_stats['exported_days']} 天"
+    )
+
+    if total_stats["failed_days"]:
+        logger.warning(f"失败的日期: {', '.join(total_stats['failed_days'])}")
+
+    return total_stats
+
+
 def main():
     """主程序入口"""
-    ap = argparse.ArgumentParser(description="优化版本的数据获取程序")
+    ap = argparse.ArgumentParser(
+        description="高级数据获取程序 - 支持内存优化、原子性处理、缺失日期检测"
+    )
     ap.add_argument(
         "--profile", default="bike", choices=["bike", "weather_grid"], help="数据集类型"
     )
     ap.add_argument(
-        "--start", type=str, help="开始日期 YYYYMMDD（默认从数据库最新日期+1开始）"
+        "--start",
+        type=str,
+        help="开始日期 YYYYMMDD（默认从数据库最新日期+1开始，或配置的开始日期）",
     )
     ap.add_argument(
         "--end", type=str, help="结束日期 YYYYMMDD（默认使用配置中的结束日期）"
@@ -493,6 +790,24 @@ def main():
         help="导出格式，逗号分隔（如: csv,geojson）",
     )
     ap.add_argument("--days-limit", type=int, help="限制处理天数（用于测试）")
+    ap.add_argument(
+        "--missing-only",
+        action="store_true",
+        default=False,
+        help="只处理缺失的日期（推荐用于修复数据）",
+    )
+    ap.add_argument(
+        "--atomic-mode",
+        action="store_true",
+        default=False,
+        help="启用原子性模式（确保数据完整性，适用于重要数据）",
+    )
+    ap.add_argument(
+        "--max-concurrent-days",
+        type=int,
+        default=None,
+        help=f"最大并发处理天数（默认从配置文件读取：{settings.DAYS_CONCURRENCY}）",
+    )
 
     args = ap.parse_args()
 
@@ -507,13 +822,27 @@ def main():
     # 创建日志目录
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
-    log_file = log_dir / f"fetch_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+
+    # 根据模式设置日志文件名
+    mode_suffix = ""
+    if args.missing_only:
+        mode_suffix += "_missing"
+    if args.atomic_mode:
+        mode_suffix += "_atomic"
+
+    log_file = (
+        log_dir / f"fetch{mode_suffix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    )
     logger.add(
         log_file,
         level="DEBUG",
         format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
         rotation="100 MB",
     )
+
+    # 记录初始内存使用
+    initial_memory = get_memory_usage()
+    logger.info(f"程序启动，初始内存使用: {initial_memory:.1f}MB")
 
     # 获取数据集配置
     profile = get_profile(args.profile)
@@ -525,17 +854,23 @@ def main():
     if args.start:
         start_date = datetime.strptime(args.start, "%Y%m%d").date()
     else:
-        # 从数据库最新日期+1开始
-        try:
-            latest = asyncio.run(get_latest_date_from_db(conn_str, profile))
-            if latest:
-                start_date = latest + timedelta(days=1)
-            else:
+        if not args.missing_only:
+            # 普通模式：从数据库最新日期+1开始
+            try:
+                latest = asyncio.run(get_latest_date_from_db(conn_str, profile))
+                if latest:
+                    start_date = latest + timedelta(days=1)
+                else:
+                    start_date = datetime.strptime(
+                        settings.DATA_START_DATE, "%Y%m%d"
+                    ).date()
+            except Exception as e:
+                logger.warning(f"获取数据库最新日期失败: {e}")
                 start_date = datetime.strptime(
                     settings.DATA_START_DATE, "%Y%m%d"
                 ).date()
-        except Exception as e:
-            logger.warning(f"获取数据库最新日期失败: {e}")
+        else:
+            # 缺失模式：从配置的开始日期开始
             start_date = datetime.strptime(settings.DATA_START_DATE, "%Y%m%d").date()
 
     if args.end:
@@ -553,7 +888,12 @@ def main():
     export_coord_sets = [f.strip() for f in args.export_coord_sets.split(",")]
     export_formats = [f.strip() for f in args.export_formats.split(",")]
 
+    max_concurrent_days = args.max_concurrent_days or settings.DAYS_CONCURRENCY
+
     logger.info(f"处理日期范围: {start_date} 到 {end_date}")
+    logger.info(f"最大并发天数: {max_concurrent_days}")
+    logger.info(f"只处理缺失日期: {args.missing_only}")
+    logger.info(f"原子性模式: {args.atomic_mode}")
     logger.info(
         f"自动导出: {args.auto_export}，坐标系: {export_coord_sets}，格式: {export_formats}"
     )
@@ -567,10 +907,17 @@ def main():
             auto_export=args.auto_export,
             export_coord_sets=export_coord_sets,
             export_formats=export_formats,
+            missing_only=args.missing_only,
+            atomic_mode=args.atomic_mode,
+            max_concurrent_days=max_concurrent_days,
         )
     )
 
-    logger.info("程序执行完成！")
+    final_memory = get_memory_usage()
+    logger.info(
+        f"程序执行完成！最终内存使用: {final_memory:.1f}MB，"
+        f"内存增长: {final_memory - initial_memory:+.1f}MB"
+    )
     return stats
 
 

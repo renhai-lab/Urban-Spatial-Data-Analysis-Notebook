@@ -71,14 +71,13 @@ data/share/raw/ 下通常有这些子目录：
 
 - csv_zip/：每天一个 zip，里面是 CSV 表格（体积小，通用）
 - geojson_zip/：每天一个 zip，里面是 GeoJSON（可以直接做地图）
-- parquet/、geoparquet/：大数据分析专用（先跳过也没关系）
 
 注意：raw 目录保存的是“原始坐标”，没有声明坐标系。适合快速浏览与教学；若用于分析或与其他地图叠加，建议改用 wgs84 目录的数据。
 
 ## 方式一：只想看看——直接用 Excel/表格
 
 1. **选择坐标系**：建议从 wgs84/csv_zip/ 开始（更标准）
-2. 找到某个日期（例如 2021-01-01.csv.zip），解压缩得到 CSV。
+2. 找到某个日期（例如 bike_data_20210101_wgs84.zip），解压缩得到 CSV。
 3. 用 Excel、WPS 或 Numbers 打开。
 4. 常见字段：
 
@@ -92,6 +91,8 @@ data/share/raw/ 下通常有这些子目录：
 - raw 目录：start_lng_raw/start_lat_raw，end_lng_raw/end_lat_raw
 
 5. 你可以用筛选功能看看某天、某公司、或某个时间段的数据量。
+
+不过公司字段不是很准
 
 小提示：CSV 行数可能很多，Excel 会变卡。只做浏览的话，过滤后保存一小份就行。
 
@@ -134,51 +135,58 @@ data/share/raw/ 下通常有这些子目录：
 
 - 访问 [https://docs.astral.sh/uv/getting-started/](https://docs.astral.sh/uv/getting-started/) 按步骤安装
 
-2. 在本仓库根目录打开终端，运行：
 
-```bash
-# 查看 WGS84 坐标的数据（推荐）
-uv run python -c "import pandas as pd; print(pd.read_csv('data/share/wgs84/csv_zip/2021-01-01.csv.zip').head())"
+2. 可视化[最简单的散点图](notebooks\可视化（最简单的散点图）.ipynb) ：
 
-# 或者查看原始坐标的数据
-uv run python -c "import pandas as pd; print(pd.read_csv('data/share/raw/csv_zip/2021-01-01.csv.zip').head())"
-```
-
-这条命令会打印头几行数据。
-
-3. 可视化（最简单的散点图）：
-
-```bash
-uv run python - <<'PY'
-import pandas as pd
-import matplotlib.pyplot as plt
+```python
+# 读取并构造 GeoDataFrame（放在一个单元格）
 import zipfile
+import pandas as pd
+import geopandas as gpd
+from shapely.geometry import Point
+from shapely import wkt
+from pathlib import Path
 
-# 使用 WGS84 坐标数据
-zip_path = 'data/share/wgs84/csv_zip/2021-01-01.csv.zip'
+zip_path = Path('../data/share/wgs84/csv_zip/bike_data_20210101_wgs84.zip')
+
 with zipfile.ZipFile(zip_path) as z:
-  with z.open(z.namelist()[0]) as f:
-    df = pd.read_csv(f)
+    with z.open(z.namelist()[0]) as f:
+        df = pd.read_csv(f)
 
-plt.figure(figsize=(10,6))
-plt.subplot(1,2,1)
-plt.scatter(df['start_lng_wgs84'][::500], df['start_lat_wgs84'][::500], s=1, alpha=0.5)
-plt.title('Start Points (WGS84)')
-plt.xlabel('Longitude')
-plt.ylabel('Latitude')
+# 检查列名并构造经纬度列（容错）
+if 'start_lng_wgs84' not in df.columns or 'start_lat_wgs84' not in df.columns:
+    if 'start_geom_wgs84' in df.columns:
+        pts = df['start_geom_wgs84'].map(lambda s: wkt.loads(s) if pd.notna(s) else None)
+        df['start_lng_wgs84'] = pts.map(lambda p: p.x if p else None)
+        df['start_lat_wgs84'] = pts.map(lambda p: p.y if p else None)
 
-plt.subplot(1,2,2)
-plt.scatter(df['end_lng_wgs84'][::500], df['end_lat_wgs84'][::500], s=1, alpha=0.5)
-plt.title('End Points (WGS84)')
-plt.xlabel('Longitude')
-plt.ylabel('Latitude')
+if 'end_lng_wgs84' not in df.columns or 'end_lat_wgs84' not in df.columns:
+    if 'end_geom_wgs84' in df.columns:
+        pts = df['end_geom_wgs84'].map(lambda s: wkt.loads(s) if pd.notna(s) else None)
+        df['end_lng_wgs84'] = pts.map(lambda p: p.x if p else None)
+        df['end_lat_wgs84'] = pts.map(lambda p: p.y if p else None)
 
-plt.tight_layout()
-plt.show()
-PY
+# 构造起点/终点 GeoDataFrame（只包含有坐标的行）
+start_df = df.dropna(subset=['start_lng_wgs84', 'start_lat_wgs84']).copy()
+end_df = df.dropna(subset=['end_lng_wgs84', 'end_lat_wgs84']).copy()
+
+gdf_start = gpd.GeoDataFrame(
+    start_df,
+    geometry=gpd.points_from_xy(start_df['start_lng_wgs84'], start_df['start_lat_wgs84']),
+    crs="EPSG:4326"
+)
+gdf_end = gpd.GeoDataFrame(
+    end_df,
+    geometry=gpd.points_from_xy(end_df['end_lng_wgs84'], end_df['end_lat_wgs84']),
+    crs="EPSG:4326"
+)
+
+# 合并用于统一绘图（添加类型标签）
+gdf_start['point_type'] = 'start'
+gdf_end['point_type'] = 'end'
+gdf = gpd.GeoDataFrame(pd.concat([gdf_start, gdf_end], ignore_index=True), crs="EPSG:4326")
 ```
 
-提示：用 `::500` 是抽样绘图，防止太卡。
 
 ## 我应该学哪些下一步？（精选清单）
 
@@ -200,7 +208,7 @@ PY
 
 - 为什么我看到的点和底图不完全重合？
 
-  - 可能是坐标系问题。raw 目录的坐标是“原始坐标”，建议换用 wgs84 目录的数据。
+  - 可能是坐标系问题。raw 目录的坐标是“原始坐标”，建议换用我转换后的 wgs84 目录的数据。
 - 文件太大打开很慢怎么办？
 
   - 先用 zip 里的 CSV 按需解压，或者只取 GeoJSON 的一部分做演示；做地图时可以抽样（比如每隔 100 行取一行）。

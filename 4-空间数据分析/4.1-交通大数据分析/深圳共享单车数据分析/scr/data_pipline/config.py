@@ -28,7 +28,7 @@ class Settings(BaseSettings):
 
     LOG_LEVEL: str = "INFO"
     CONNECT_TIMEOUT: int = 10
-    DAYS_CONCURRENCY: int = 100
+    DAYS_CONCURRENCY: int = 3  # 并发处理天数（原子性和内存优化考虑）
 
     # TimescaleDB配置
     TS_TUNE_MEMORY: str = "2GB"

@@ -128,7 +128,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # 读取导出的数据
-df = pd.read_csv('data/share/wgs84/csv_zip/2021-01-01.csv.zip')
+df = pd.read_csv('data/share/wgs84/csv_zip/bike_data_20210101_wgs84.zip')
 
 # 基础统计
 print(f"总行程数: {len(df)}")
