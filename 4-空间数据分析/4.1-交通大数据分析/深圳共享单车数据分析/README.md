@@ -77,6 +77,9 @@ docker run -d \
 # 等待启动后连接并创建扩展
 docker exec -it timescaledb-postgis psql -U postgres -d shenzhen_bike -c \
   "CREATE EXTENSION IF NOT EXISTS timescaledb; CREATE EXTENSION IF NOT EXISTS postgis;"
+
+如果是自己安装的postgres+postgis，记得先创建数据库。
+
 ```
 
 ## 安装依赖（Python）
