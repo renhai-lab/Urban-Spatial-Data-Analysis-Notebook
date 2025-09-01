@@ -30,37 +30,37 @@ class Settings(BaseSettings):
     CONNECT_TIMEOUT: int = 10
     DAYS_CONCURRENCY: int = 100
 
-    # ---- 坐标/导出设置 ----
-    SOURCE_COORD: str = "bd09ll"  # 源坐标系：bd09ll | gcj02 | wgs84
-    EXPORT_DIR: str = "viz/mapvgl-baidu/data"
-    COORD_CONVERT_MODE: str = "local"  # local | api
-    BAIDU_AK: str | None = None  # 若使用百度API转换需要设置
-    BAIDU_GEOCONV_URL: str = "https://api.map.baidu.com/geoconv/v1/"
-    GEOCONV_BATCH_SIZE: int = 100  # geoconv 单次最多100点
-    GEOCONV_QPS: int = 30  # geoconv QPS 上限约 30
-
     # TimescaleDB配置
     TS_TUNE_MEMORY: str = "2GB"
     TS_TUNE_NUM_CPUS: str = "2"
     ENABLE_TIMESCALE: str = "true"
     PARTITION_INTERVAL: str = "1 day"
 
-    # 导出配置
+    # 按日导出配置
     EXPORT_BASE_DIR: str = "data/share"
-    EXPORT_MAX_WORKERS: str = "4"
-    EXPORT_BATCH_SIZE: str = "50000"
+    EXPORT_MAX_WORKERS: int = 4
+    EXPORT_BATCH_SIZE: int = 50000
 
     # 性能配置
-    DB_BATCH_SIZE: str = "10000"
-    BUFFER_SIZE_MB: str = "100"
-    PROGRESS_REPORT_INTERVAL: str = "10"
-    ENABLE_PERFORMANCE_STATS: str = "true"
+    DB_BATCH_SIZE: int = 10000
+    BUFFER_SIZE_MB: int = 100
+    PROGRESS_REPORT_INTERVAL: int = 10
+    ENABLE_PERFORMANCE_STATS: bool = True
 
     model_config = {
         "env_file": ".env",  # 相对于项目目录的路径
         "env_file_encoding": "utf-8",
         "extra": "ignore",  # 忽略额外的环境变量
     }
+
+    # # ---- 可视化导出设置（测试用，获取数据不需要） ----
+    # SOURCE_COORD: str = "bd09ll"  # 源坐标系：bd09ll | gcj02 | wgs84
+    # EXPORT_DIR: str = "viz/mapvgl-baidu/data"
+    # COORD_CONVERT_MODE: str = "local"  # local | api
+    # BAIDU_AK: str | None = None  # 若使用百度API转换需要设置
+    # BAIDU_GEOCONV_URL: str = "https://api.map.baidu.com/geoconv/v1/"
+    # GEOCONV_BATCH_SIZE: int = 100  # geoconv 单次最多100点
+    # GEOCONV_QPS: int = 30  # geoconv QPS 上限约 30
 
     def get_conn_str(self) -> str:
         return (
@@ -70,5 +70,6 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
 
 logger.debug(f"Settings loaded: {settings}")

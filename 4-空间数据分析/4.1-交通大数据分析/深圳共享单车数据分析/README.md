@@ -148,7 +148,7 @@ uv run python -m scr.data_pipline.fetcher
 # 方式 B：现有虚拟环境
 .venv\Scripts\python -m scr.data_pipline.fetcher
 
-# 指定日期范围
+# 指定日期范围 不指定日期的时候会从数据库中读取最新的日期 然后开始往后爬取
 uv run python -m scr.data_pipline.fetcher --start 20210101 --end 20210105
 
 # 同时导出双坐标系数据

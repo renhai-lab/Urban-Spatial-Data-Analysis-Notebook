@@ -23,7 +23,7 @@ from tqdm.asyncio import tqdm
 from .config import settings
 from .profiles import get_profile, DatasetProfile
 from .db import setup_database, get_latest_date_from_db
-from .export_share import export_day
+from .export_memory import export_records_to_files
 from .utils import tz_beijing
 
 """在 Windows 上将事件循环策略切换为 WindowsSelectorEventLoopPolicy，
@@ -283,7 +283,7 @@ async def process_date_range(
     export_coord_sets: list = ["raw", "wgs84"],
     export_formats: list = ["csv", "geojson"],
 ):
-    """处理日期范围内的数据"""
+    """处理日期范围内的数据，实现流水线式处理：获取完即导出"""
     conn_str = settings.get_conn_str()
 
     # 设置数据库
@@ -304,66 +304,151 @@ async def process_date_range(
         "exported_days": 0,
     }
 
+    logger.info(
+        f"开始流水线处理 {len(dates)} 天数据，最大并发天数: {settings.DAYS_CONCURRENCY}"
+    )
+
+    # 创建信号量来控制并发数
+    fetch_semaphore = asyncio.Semaphore(settings.DAYS_CONCURRENCY)
+    export_semaphore = asyncio.Semaphore(settings.EXPORT_MAX_WORKERS)
+
     async with aiohttp.ClientSession(
         timeout=aiohttp.ClientTimeout(total=60)
     ) as session:
+
+        # 创建所有日期的处理任务
+        tasks = []
         for target_date in dates:
+            task = process_single_day_pipeline(
+                session=session,
+                target_date=target_date,
+                profile=profile,
+                conn_str=conn_str,
+                auto_export=auto_export,
+                export_coord_sets=export_coord_sets,
+                export_formats=export_formats,
+                fetch_semaphore=fetch_semaphore,
+                export_semaphore=export_semaphore,
+            )
+            tasks.append(task)
+
+        # 并发执行所有任务，每个任务内部是流水线式的
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # 统计结果
+        for target_date, result in zip(dates, results):
             try:
-                logger.info(f"开始处理 {target_date}")
-
-                # 获取数据
-                records, stats = await fetch_day(
-                    session, target_date, profile, settings.MAX_CONCURRENCY
-                )
-
-                if records is None:
-                    logger.error(f"{target_date} 数据获取失败")
+                if isinstance(result, Exception):
+                    logger.error(f"{target_date} 处理失败: {result}")
                     continue
 
-                if not records:
-                    logger.info(f"{target_date} 无数据")
-                    total_stats["successful_days"] += 1
+                if not isinstance(result, dict):
+                    logger.error(f"{target_date} 返回结果格式错误: {result}")
                     continue
 
-                # 插入数据库
-                inserted = await bulk_insert(conn_str, profile, records)
-                if inserted > 0:
+                if result.get("success", False):
                     total_stats["successful_days"] += 1
-                    total_stats["total_records"] += inserted
-                    total_stats["total_conversion_errors"] += stats.get(
+                    total_stats["total_records"] += result.get("records_count", 0)
+                    total_stats["total_conversion_errors"] += result.get(
                         "conversion_errors", 0
                     )
-
-                    logger.success(f"{target_date} 完成：{inserted} 条记录入库")
-
-                    # 自动导出
-                    if auto_export and inserted > 0:
-                        try:
-                            export_base = Path("data/share")
-                            export_day(
-                                conn_str,
-                                profile.table_name,
-                                target_date,
-                                export_base,
-                                export_coord_sets,
-                                export_formats,
-                            )
-                            total_stats["exported_days"] += 1
-                            logger.info(f"{target_date} 导出完成")
-                        except Exception as e:
-                            logger.error(f"{target_date} 导出失败: {e}")
+                    if result.get("exported", False):
+                        total_stats["exported_days"] += 1
 
             except Exception as e:
-                logger.error(f"处理 {target_date} 时发生错误: {e}")
+                logger.error(f"处理 {target_date} 结果时发生错误: {e}")
 
     logger.success(
-        f"处理完成！成功: {total_stats['successful_days']}/{total_stats['total_days']} 天，"
+        f"流水线处理完成！成功: {total_stats['successful_days']}/{total_stats['total_days']} 天，"
         f"总记录: {total_stats['total_records']:,}，"
         f"坐标转换错误: {total_stats['total_conversion_errors']:,}，"
         f"导出: {total_stats['exported_days']} 天"
     )
 
     return total_stats
+
+
+async def process_single_day_pipeline(
+    session,
+    target_date: date,
+    profile: DatasetProfile,
+    conn_str: str,
+    auto_export: bool,
+    export_coord_sets: list,
+    export_formats: list,
+    fetch_semaphore: asyncio.Semaphore,
+    export_semaphore: asyncio.Semaphore,
+):
+    """处理单天数据的完整流水线：获取->入库->导出"""
+
+    result = {
+        "success": False,
+        "records_count": 0,
+        "conversion_errors": 0,
+        "exported": False,
+    }
+
+    try:
+        # 控制并发获取数据
+        async with fetch_semaphore:
+            logger.info(f"开始获取 {target_date} 数据")
+
+            # 获取数据
+            records, stats = await fetch_day(
+                session, target_date, profile, settings.MAX_CONCURRENCY
+            )
+
+            if records is None:
+                logger.error(f"{target_date} 数据获取失败")
+                return result
+
+            if not records:
+                logger.info(f"{target_date} 无数据")
+                result["success"] = True
+                return result
+
+            logger.success(f"{target_date} 获取完成：{len(records)} 条记录")
+            result["records_count"] = len(records)
+            result["conversion_errors"] = stats.get("conversion_errors", 0)
+
+        # 入库操作（不在信号量控制内，因为数据库连接有自己的池管理）
+        logger.info(f"开始入库 {target_date} 数据")
+        inserted = await bulk_insert(conn_str, profile, records)
+
+        if inserted > 0:
+            logger.success(f"{target_date} 入库完成：{inserted} 条记录")
+            result["success"] = True
+
+            # 导出操作（获取完数据就立即开始，不等待其他天）
+            if auto_export:
+                async with export_semaphore:
+                    logger.info(f"开始导出 {target_date} 数据")
+                    try:
+                        export_base = Path("data/share")
+                        export_stats = await export_records_to_files(
+                            records=records,
+                            profile=profile,
+                            target_date=target_date,
+                            export_base=export_base,
+                            coord_sets=export_coord_sets,
+                            formats=export_formats,
+                        )
+
+                        if export_stats.get("total", 0) > 0:
+                            result["exported"] = True
+                            logger.success(f"{target_date} 导出完成")
+                        else:
+                            logger.warning(f"{target_date} 导出无数据")
+
+                    except Exception as e:
+                        logger.error(f"{target_date} 导出失败: {e}")
+        else:
+            logger.warning(f"{target_date} 入库失败")
+
+    except Exception as e:
+        logger.error(f"处理 {target_date} 时发生错误: {e}")
+
+    return result
 
 
 def main():

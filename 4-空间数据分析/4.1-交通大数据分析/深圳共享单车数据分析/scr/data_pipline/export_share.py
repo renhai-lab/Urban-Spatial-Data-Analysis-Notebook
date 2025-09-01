@@ -1,6 +1,6 @@
 """
 优化版本的按天导出功能，支持raw和wgs84两套坐标系
-参考原始export_share.py的逻辑
+参考原始export_share.py的逻辑，并增加内存优化和并发处理
 """
 
 from __future__ import annotations
@@ -13,8 +13,10 @@ import json
 import zipfile
 import io
 import csv
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, ProcessPoolExecutor
 import os
+import gc
+from contextlib import contextmanager
 
 import psycopg
 from psycopg import sql
@@ -143,6 +145,182 @@ def _build_day_query(conn, table: str, coord_set: str, day: date):
     return query
 
 
+@contextmanager
+def get_db_cursor(conn_str: str):
+    """获取数据库游标的上下文管理器"""
+    conn = None
+    try:
+        conn = psycopg.connect(conn_str)
+        yield conn
+    finally:
+        if conn:
+            conn.close()
+
+
+def _export_csv_stream(
+    conn_str: str,
+    query,
+    day: date,
+    csv_file: Path,
+    csv_zip_file: Path,
+    coord_set: str,
+    batch_size: int = 50000,
+) -> int:
+    """流式导出CSV格式"""
+    record_count = 0
+
+    with get_db_cursor(conn_str) as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(query, (day,))
+
+            # 先写入临时文件，然后压缩
+            with open(csv_file, "w", newline="", encoding="utf-8") as f:
+                writer = None
+
+                while True:
+                    rows = cur.fetchmany(batch_size)
+                    if not rows:
+                        break
+
+                    # 初始化writer（在第一批数据时）
+                    if writer is None and rows:
+                        fieldnames = list(rows[0].keys())
+                        writer = csv.DictWriter(f, fieldnames=fieldnames)
+                        writer.writeheader()
+
+                    # 写入数据
+                    if writer is not None:
+                        for row in rows:
+                            writer.writerow(row)
+                            record_count += 1
+
+                    # 每批处理后清理内存
+                    del rows
+                    gc.collect()
+
+    # 压缩文件
+    if record_count > 0:
+        with zipfile.ZipFile(csv_zip_file, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.write(csv_file, csv_file.name)
+        csv_file.unlink()  # 删除原始文件
+
+    return record_count
+
+
+def _export_geojson_stream(
+    conn_str: str,
+    query,
+    day: date,
+    geojson_file: Path,
+    geojson_zip_file: Path,
+    coord_set: str,
+    batch_size: int = 50000,
+) -> int:
+    """流式导出GeoJSON格式"""
+    record_count = 0
+
+    with get_db_cursor(conn_str) as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(query, (day,))
+
+            # 确定字段名
+            if coord_set == "raw":
+                start_lng_field = "start_lng_raw"
+                start_lat_field = "start_lat_raw"
+                end_lng_field = "end_lng_raw"
+                end_lat_field = "end_lat_raw"
+            else:  # wgs84
+                start_lng_field = "start_lng_wgs84"
+                start_lat_field = "start_lat_wgs84"
+                end_lng_field = "end_lng_wgs84"
+                end_lat_field = "end_lat_wgs84"
+
+            # 分批处理并写入GeoJSON
+            features = []
+
+            while True:
+                rows = cur.fetchmany(batch_size)
+                if not rows:
+                    break
+
+                # 转换为GeoJSON features
+                for row in rows:
+                    # 跳过没有坐标的记录
+                    if (
+                        row.get(start_lng_field) is None
+                        or row.get(start_lat_field) is None
+                    ):
+                        continue
+
+                    # 创建起点feature
+                    start_feature = {
+                        "type": "Feature",
+                        "geometry": {
+                            "type": "Point",
+                            "coordinates": [row[start_lng_field], row[start_lat_field]],
+                        },
+                        "properties": {
+                            "id": row["id"],
+                            "user_id": row["user_id"],
+                            "company_id": row["company_id"],
+                            "start_time_cn": row["start_time_cn"],
+                            "end_time_cn": row["end_time_cn"],
+                            "point_type": "start",
+                        },
+                    }
+                    features.append(start_feature)
+                    record_count += 1
+
+                    # 如果有终点坐标，也创建终点feature
+                    if (
+                        row.get(end_lng_field) is not None
+                        and row.get(end_lat_field) is not None
+                    ):
+                        end_feature = {
+                            "type": "Feature",
+                            "geometry": {
+                                "type": "Point",
+                                "coordinates": [row[end_lng_field], row[end_lat_field]],
+                            },
+                            "properties": {
+                                "id": row["id"],
+                                "user_id": row["user_id"],
+                                "company_id": row["company_id"],
+                                "start_time_cn": row["start_time_cn"],
+                                "end_time_cn": row["end_time_cn"],
+                                "point_type": "end",
+                            },
+                        }
+                        features.append(end_feature)
+                        record_count += 1
+
+                # 清理内存
+                del rows
+                gc.collect()
+
+            # 写入GeoJSON文件
+            if features:
+                # 根据坐标系设置CRS
+                if coord_set == "wgs84":
+                    crs = {"type": "name", "properties": {"name": "EPSG:4326"}}
+                else:
+                    crs = None
+
+                geojson = {"type": "FeatureCollection", "features": features}
+                if crs:
+                    geojson["crs"] = crs
+
+                with open(geojson_file, "w", encoding="utf-8") as f:
+                    json.dump(geojson, f, ensure_ascii=False, separators=(",", ":"))
+
+                # 压缩文件
+                with zipfile.ZipFile(geojson_zip_file, "w", zipfile.ZIP_DEFLATED) as zf:
+                    zf.write(geojson_file, geojson_file.name)
+                geojson_file.unlink()  # 删除原始文件
+
+    return record_count
+
+
 def export_day(
     conn_str: str,
     table: str,
@@ -152,7 +330,7 @@ def export_day(
     formats: List[str] = ["csv", "geojson"],
     batch_size: int = 50000,
 ) -> dict:
-    """导出某天的数据为CSV和GeoJSON格式，支持多套坐标系"""
+    """导出某天的数据为CSV和GeoJSON格式，支持多套坐标系和流式处理"""
 
     dirs = _ensure_dirs(output_base, coord_sets)
     day_str = day.strftime("%Y%m%d")
@@ -160,202 +338,100 @@ def export_day(
 
     logger.info(f"开始导出 {day_str} 的数据，坐标系: {coord_sets}，格式: {formats}")
 
-    with psycopg.connect(conn_str) as conn:
+    # 使用线程池并发处理不同坐标系和格式的组合
+    max_workers = min(len(coord_sets) * len(formats), settings.EXPORT_MAX_WORKERS)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = []
+
         for coord_set in coord_sets:
             stats["coord_sets"][coord_set] = {"exported": 0, "formats": []}
 
             try:
-                query = _build_day_query(conn, table, coord_set, day)
+                # 构建查询
+                with get_db_cursor(conn_str) as conn:
+                    query = _build_day_query(conn, table, coord_set, day)
 
-                with conn.cursor(row_factory=dict_row) as cur:
-                    cur.execute(query, (day,))
+                # 为每种格式创建导出任务
+                for format_type in formats:
+                    if format_type == "csv":
+                        csv_file = (
+                            dirs[coord_set]["csv"]
+                            / f"bike_data_{day_str}_{coord_set}.csv"
+                        )
+                        csv_zip_file = (
+                            dirs[coord_set]["csv"]
+                            / f"bike_data_{day_str}_{coord_set}.zip"
+                        )
 
-                    # 分批处理数据
-                    all_rows = []
-                    while True:
-                        rows = cur.fetchmany(batch_size)
-                        if not rows:
-                            break
-                        all_rows.extend(rows)
+                        future = executor.submit(
+                            _export_csv_stream,
+                            conn_str,
+                            query,
+                            day,
+                            csv_file,
+                            csv_zip_file,
+                            coord_set,
+                            batch_size,
+                        )
+                        futures.append((future, coord_set, format_type, csv_zip_file))
 
-                    if coord_set == coord_sets[0]:  # 只在第一个坐标系时设置总数
-                        stats["total"] = len(all_rows)
+                    elif format_type == "geojson":
+                        geojson_file = (
+                            dirs[coord_set]["geojson"]
+                            / f"bike_data_{day_str}_{coord_set}.geojson"
+                        )
+                        geojson_zip_file = (
+                            dirs[coord_set]["geojson"]
+                            / f"bike_data_{day_str}_{coord_set}.zip"
+                        )
 
-                    if not all_rows:
-                        logger.info(f"{day_str} {coord_set} 坐标系无数据")
-                        continue
-
-                    # 导出CSV
-                    if "csv" in formats:
-                        try:
-                            csv_file = (
-                                dirs[coord_set]["csv"]
-                                / f"bike_data_{day_str}_{coord_set}.csv"
-                            )
-                            csv_zip_file = (
-                                dirs[coord_set]["csv"]
-                                / f"bike_data_{day_str}_{coord_set}.zip"
-                            )
-
-                            # 写入CSV
-                            with open(csv_file, "w", newline="", encoding="utf-8") as f:
-                                if all_rows:
-                                    fieldnames = list(all_rows[0].keys())
-                                    writer = csv.DictWriter(f, fieldnames=fieldnames)
-                                    writer.writeheader()
-                                    for row in all_rows:
-                                        writer.writerow(row)
-
-                            # 压缩CSV
-                            with zipfile.ZipFile(
-                                csv_zip_file, "w", zipfile.ZIP_DEFLATED
-                            ) as zf:
-                                zf.write(csv_file, csv_file.name)
-
-                            # 删除原始CSV文件
-                            csv_file.unlink()
-
-                            stats["coord_sets"][coord_set]["formats"].append(
-                                f"CSV: {csv_zip_file}"
-                            )
-                            logger.debug(f"{coord_set} CSV导出完成: {csv_zip_file}")
-
-                        except Exception as e:
-                            logger.error(f"{coord_set} CSV导出失败: {e}")
-
-                    # 导出GeoJSON
-                    if "geojson" in formats:
-                        try:
-                            geojson_file = (
-                                dirs[coord_set]["geojson"]
-                                / f"bike_data_{day_str}_{coord_set}.geojson"
-                            )
-                            geojson_zip_file = (
-                                dirs[coord_set]["geojson"]
-                                / f"bike_data_{day_str}_{coord_set}.zip"
-                            )
-
-                            features = []
-
-                            # 根据坐标系确定字段名
-                            if coord_set == "raw":
-                                start_lng_field = "start_lng_raw"
-                                start_lat_field = "start_lat_raw"
-                                end_lng_field = "end_lng_raw"
-                                end_lat_field = "end_lat_raw"
-                            else:  # wgs84
-                                start_lng_field = "start_lng_wgs84"
-                                start_lat_field = "start_lat_wgs84"
-                                end_lng_field = "end_lng_wgs84"
-                                end_lat_field = "end_lat_wgs84"
-
-                            for row in all_rows:
-                                # 跳过没有坐标的记录
-                                if (
-                                    row.get(start_lng_field) is None
-                                    or row.get(start_lat_field) is None
-                                ):
-                                    continue
-
-                                # 创建起点feature
-                                start_feature = {
-                                    "type": "Feature",
-                                    "geometry": {
-                                        "type": "Point",
-                                        "coordinates": [
-                                            row[start_lng_field],
-                                            row[start_lat_field],
-                                        ],
-                                    },
-                                    "properties": {
-                                        "id": row["id"],
-                                        "user_id": row["user_id"],
-                                        "company_id": row["company_id"],
-                                        "start_time_cn": row["start_time_cn"],
-                                        "end_time_cn": row["end_time_cn"],
-                                        "point_type": "start",
-                                    },
-                                }
-                                features.append(start_feature)
-
-                                # 如果有终点坐标，也创建终点feature
-                                if (
-                                    row.get(end_lng_field) is not None
-                                    and row.get(end_lat_field) is not None
-                                ):
-                                    end_feature = {
-                                        "type": "Feature",
-                                        "geometry": {
-                                            "type": "Point",
-                                            "coordinates": [
-                                                row[end_lng_field],
-                                                row[end_lat_field],
-                                            ],
-                                        },
-                                        "properties": {
-                                            "id": row["id"],
-                                            "user_id": row["user_id"],
-                                            "company_id": row["company_id"],
-                                            "start_time_cn": row["start_time_cn"],
-                                            "end_time_cn": row["end_time_cn"],
-                                            "point_type": "end",
-                                        },
-                                    }
-                                    features.append(end_feature)
-
-                            # 根据坐标系设置CRS
-                            if coord_set == "wgs84":
-                                crs = {
-                                    "type": "name",
-                                    "properties": {"name": "EPSG:4326"},
-                                }
-                            else:
-                                # raw坐标系不指定CRS（因为可能是GCJ-02等）
-                                crs = None
-
-                            geojson = {
-                                "type": "FeatureCollection",
-                                "features": features,
-                            }
-
-                            if crs:
-                                geojson["crs"] = crs
-
-                            # 写入GeoJSON
-                            with open(geojson_file, "w", encoding="utf-8") as f:
-                                json.dump(
-                                    geojson,
-                                    f,
-                                    ensure_ascii=False,
-                                    separators=(",", ":"),
-                                )
-
-                            # 压缩GeoJSON
-                            with zipfile.ZipFile(
-                                geojson_zip_file, "w", zipfile.ZIP_DEFLATED
-                            ) as zf:
-                                zf.write(geojson_file, geojson_file.name)
-
-                            # 删除原始GeoJSON文件
-                            geojson_file.unlink()
-
-                            stats["coord_sets"][coord_set]["formats"].append(
-                                f"GeoJSON: {geojson_zip_file}"
-                            )
-                            logger.debug(
-                                f"{coord_set} GeoJSON导出完成: {geojson_zip_file}"
-                            )
-
-                        except Exception as e:
-                            logger.error(f"{coord_set} GeoJSON导出失败: {e}")
-
-                    stats["coord_sets"][coord_set]["exported"] = len(all_rows)
-                    logger.info(
-                        f"{day_str} {coord_set} 导出完成，共 {len(all_rows)} 条记录"
-                    )
+                        future = executor.submit(
+                            _export_geojson_stream,
+                            conn_str,
+                            query,
+                            day,
+                            geojson_file,
+                            geojson_zip_file,
+                            coord_set,
+                            batch_size,
+                        )
+                        futures.append(
+                            (future, coord_set, format_type, geojson_zip_file)
+                        )
 
             except Exception as e:
-                logger.error(f"{day_str} {coord_set} 坐标系导出失败: {e}")
+                logger.error(f"{day_str} {coord_set} 坐标系查询构建失败: {e}")
+                continue
+
+        # 收集结果
+        for future, coord_set, format_type, output_file in futures:
+            try:
+                record_count = future.result()
+                if record_count > 0:
+                    stats["coord_sets"][coord_set]["exported"] = max(
+                        stats["coord_sets"][coord_set]["exported"], record_count
+                    )
+                    stats["coord_sets"][coord_set]["formats"].append(
+                        f"{format_type.upper()}: {output_file}"
+                    )
+                    logger.debug(
+                        f"{coord_set} {format_type.upper()}导出完成: {output_file}"
+                    )
+                else:
+                    logger.info(f"{day_str} {coord_set} {format_type} 无数据")
+
+            except Exception as e:
+                logger.error(f"{coord_set} {format_type.upper()}导出失败: {e}")
+
+    # 更新总计
+    if coord_sets:
+        stats["total"] = max(stats["coord_sets"][cs]["exported"] for cs in coord_sets)
+
+    for coord_set in coord_sets:
+        exported = stats["coord_sets"][coord_set]["exported"]
+        if exported > 0:
+            logger.info(f"{day_str} {coord_set} 导出完成，共 {exported} 条记录")
 
     return stats
 
@@ -369,12 +445,15 @@ def export_date_range(
     coord_sets: List[str] = ["raw", "wgs84"],
     formats: List[str] = ["csv", "geojson"],
     batch_size: int = 50000,
-    max_workers: int = 4,
+    max_workers: Optional[int] = None,
 ) -> dict:
     """导出日期范围内的数据"""
 
     if output_base is None:
         output_base = Path("data/share")
+
+    if max_workers is None:
+        max_workers = settings.EXPORT_MAX_WORKERS
 
     output_base.mkdir(parents=True, exist_ok=True)
 
@@ -386,7 +465,8 @@ def export_date_range(
         current += timedelta(days=1)
 
     logger.info(
-        f"开始导出 {len(dates)} 天的数据，坐标系: {coord_sets}，格式: {formats}"
+        f"开始导出 {len(dates)} 天的数据，坐标系: {coord_sets}，格式: {formats}，"
+        f"最大并发数: {max_workers}"
     )
 
     total_stats = {
@@ -453,7 +533,9 @@ if __name__ == "__main__":
     ap.add_argument("--formats", default="csv,geojson", help="导出格式")
     ap.add_argument("--output", default="data/share", help="输出目录")
     ap.add_argument("--batch", type=int, default=50000, help="批处理大小")
-    ap.add_argument("--workers", type=int, default=4, help="并发数")
+    ap.add_argument(
+        "--workers", type=int, default=settings.EXPORT_MAX_WORKERS, help="并发数"
+    )
 
     args = ap.parse_args()
 

@@ -14,6 +14,8 @@ dependencies = [
     "pydantic-settings>=2.10.1",
     "tqdm>=4.67.1",
     "eviltransform>=0.1.1",
+    "geopandas>=1.1.1",
+    "shapely>=2.1.1",
 ]
 
 [[tool.uv.index]]
@@ -22,10 +24,7 @@ default = true
 
 [dependency-groups]
 dev = [
-    "geopandas[all]>=1.1.1",
     "notebook>=7.4.5",
-    "pandas>=2.3.2",
     "pyogrio>=0.11.1",
     "pyproj>=3.7.2",
-    "shapely>=2.1.1",
 ]
