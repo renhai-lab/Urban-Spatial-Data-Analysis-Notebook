@@ -96,7 +96,6 @@ async def fetch_page(
                     # 解析JSON
                     try:
                         json_data = await response.json(content_type=None)
-                        logger.debug(f"json_data: {json_data}")
                     except Exception as e:
                         text = await response.text()
                         snippet = text[:1000].replace("\n", " ") if text else ""
@@ -245,9 +244,13 @@ async def fetch_day(
 
 
 async def bulk_insert(conn_str: str, profile: DatasetProfile, records: list):
-    """批量插入数据到数据库"""
+    """批量插入数据到数据库（分批 COPY，带进度日志）。"""
     if not records:
         return 0
+
+    batch_size = getattr(settings, "DB_BATCH_SIZE", 10000) or 10000
+    total = len(records)
+    inserted_total = 0
 
     try:
         async with await psycopg.AsyncConnection.connect(
@@ -257,22 +260,32 @@ async def bulk_insert(conn_str: str, profile: DatasetProfile, records: list):
             columns_idents = [sql.Identifier(col) for col in profile.copy_columns]
 
             async with aconn.cursor() as acur:
-                # 使用 COPY 批量插入
                 copy_sql = sql.SQL("COPY {} ({}) FROM STDIN").format(
                     table_ident, sql.SQL(", ").join(columns_idents)
                 )
 
-                async with acur.copy(copy_sql) as copy:
-                    for record in records:
-                        await copy.write_row(record)
-
-                await aconn.commit()
-                logger.debug(f"成功插入 {len(records)} 条记录到 {profile.table_name}")
-                return len(records)
+                for i in range(0, total, batch_size):
+                    batch = records[i : i + batch_size]
+                    async with acur.copy(copy_sql) as copy:
+                        for record in batch:
+                            await copy.write_row(record)
+                    await aconn.commit()
+                    inserted_total += len(batch)
+                    pct = inserted_total * 100 / total
+                    logger.info(
+                        f"COPY 进度: {inserted_total:,}/{total:,} ({pct:.1f}%) 已提交 -> {profile.table_name}"
+                    )
 
     except Exception as e:
-        logger.error(f"批量插入失败: {e}")
-        return 0
+        logger.error(
+            f"批量插入失败: {e}（已提交 {inserted_total:,}/{total:,}）"
+        )
+        return inserted_total
+
+    logger.success(
+        f"成功提交 {inserted_total:,}/{total:,} 条记录到 {profile.table_name}"
+    )
+    return inserted_total
 
 
 async def process_date_range(
