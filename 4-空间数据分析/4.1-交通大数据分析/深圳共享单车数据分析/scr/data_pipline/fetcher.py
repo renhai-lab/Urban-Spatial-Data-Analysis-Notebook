@@ -18,6 +18,8 @@ import gc
 import psutil
 import os
 from typing import List, Set, Dict, Optional
+from concurrent.futures import ThreadPoolExecutor
+import threading
 
 import aiohttp
 import json
@@ -206,11 +208,44 @@ def is_empty_data(obj) -> bool:
     return True
 
 
+# 全局线程池，用于CPU密集型任务（如坐标转换）
+_thread_pool = None
+
+
+def get_thread_pool():
+    """获取全局线程池"""
+    global _thread_pool
+    if _thread_pool is None:
+        max_workers = min(4, (os.cpu_count() or 1) + 1)  # 限制线程数量
+        _thread_pool = ThreadPoolExecutor(max_workers=max_workers)
+    return _thread_pool
+
+
+def process_records_batch(raw_list, profile):
+    """
+    在线程池中处理一批记录的坐标转换
+    这是CPU密集型操作，适合使用线程池
+    """
+    prepared_data = []
+    conversion_errors = 0
+
+    for rec in raw_list:
+        try:
+            prepared = profile.prepare_record(rec)
+            if prepared is not None:
+                prepared_data.append(prepared)
+        except Exception as e:
+            conversion_errors += 1
+            # 只在debug模式下输出详细错误
+
+    return prepared_data, conversion_errors
+
+
 async def fetch_page(
     session, page_num, target_date, semaphore, profile: DatasetProfile
 ):
     """
-    异步获取单页数据，包含坐标转换功能
+    异步获取单页数据，包含优化的坐标转换功能
     """
     params = {
         "appKey": settings.APP_KEY,
@@ -289,19 +324,27 @@ async def fetch_page(
                             "expected_total": expected_total if page_num == 1 else None,
                         }
 
-                    # 处理数据（包含坐标转换）
+                    # 处理数据（使用线程池优化坐标转换）
                     raw_list = json_data.get("data", [])
-                    prepared_data = []
-                    conversion_errors = 0
 
-                    for rec in raw_list:
-                        try:
-                            prepared = profile.prepare_record(rec)
-                            if prepared is not None:
-                                prepared_data.append(prepared)
-                        except Exception as e:
-                            conversion_errors += 1
-                            logger.debug(f"记录处理失败: {e}")
+                    # 如果数据量较大，使用线程池处理坐标转换
+                    if len(raw_list) > 100:  # 阈值可以调整
+                        loop = asyncio.get_event_loop()
+                        prepared_data, conversion_errors = await loop.run_in_executor(
+                            get_thread_pool(), process_records_batch, raw_list, profile
+                        )
+                    else:
+                        # 数据量小时直接处理
+                        prepared_data = []
+                        conversion_errors = 0
+                        for rec in raw_list:
+                            try:
+                                prepared = profile.prepare_record(rec)
+                                if prepared is not None:
+                                    prepared_data.append(prepared)
+                            except Exception as e:
+                                conversion_errors += 1
+                                logger.debug(f"记录处理失败: {e}")
 
                     if conversion_errors > 0:
                         logger.warning(f"坐标转换失败 {conversion_errors} 条记录")
@@ -420,14 +463,19 @@ async def fetch_day_optimized(
     return all_records, stats
 
 
-async def bulk_insert(conn_str: str, profile: DatasetProfile, records: list):
-    """批量插入数据到数据库（分批 COPY，带进度日志）。"""
+async def bulk_insert_with_progress(
+    conn_str: str, profile: DatasetProfile, records: list, date_str: str = ""
+):
+    """批量插入数据到数据库（分批 COPY，带详细进度显示）。"""
     if not records:
         return 0
 
     batch_size = getattr(settings, "DB_BATCH_SIZE", 10000) or 10000
     total = len(records)
     inserted_total = 0
+
+    # 创建进度条
+    progress_desc = f"入库 {date_str}" if date_str else "批量入库"
 
     try:
         async with await psycopg.AsyncConnection.connect(
@@ -441,21 +489,27 @@ async def bulk_insert(conn_str: str, profile: DatasetProfile, records: list):
                     table_ident, sql.SQL(", ").join(columns_idents)
                 )
 
-                for i in range(0, total, batch_size):
-                    batch = records[i : i + batch_size]
-                    async with acur.copy(copy_sql) as copy:
-                        for record in batch:
-                            await copy.write_row(record)
-                    await aconn.commit()
-                    inserted_total += len(batch)
-                    pct = inserted_total * 100 / total
+                # 使用 tqdm 创建进度条
+                with tqdm(total=total, desc=progress_desc, unit="records") as pbar:
+                    for i in range(0, total, batch_size):
+                        batch = records[i : i + batch_size]
+                        async with acur.copy(copy_sql) as copy:
+                            for record in batch:
+                                await copy.write_row(record)
+                        await aconn.commit()
+                        inserted_total += len(batch)
 
-                    # 记录内存使用情况
-                    memory_mb = get_memory_usage()
-                    logger.info(
-                        f"COPY 进度: {inserted_total:,}/{total:,} ({pct:.1f}%) "
-                        f"已提交 -> {profile.table_name}, 内存: {memory_mb:.1f}MB"
-                    )
+                        # 更新进度条
+                        pbar.update(len(batch))
+
+                        # 记录内存使用情况
+                        memory_mb = get_memory_usage()
+                        pbar.set_postfix(
+                            {
+                                "memory": f"{memory_mb:.1f}MB",
+                                "table": profile.table_name,
+                            }
+                        )
 
     except Exception as e:
         logger.error(f"批量插入失败: {e}（已提交 {inserted_total:,}/{total:,}）")
@@ -476,7 +530,7 @@ async def process_single_day_pipeline(
     export_coord_sets: list,
     export_formats: list,
     fetch_semaphore: asyncio.Semaphore,
-    export_semaphore: asyncio.Semaphore,
+    export_semaphore: Optional[asyncio.Semaphore] = None,
     atomic_mode: bool = False,
 ):
     """
@@ -528,7 +582,9 @@ async def process_single_day_pipeline(
 
         # 入库操作
         logger.info(f"开始入库 {target_date} 数据")
-        inserted = await bulk_insert(conn_str, profile, records)
+        inserted = await bulk_insert_with_progress(
+            conn_str, profile, records, target_date.strftime("%Y-%m-%d")
+        )
 
         if inserted > 0:
             # 原子性模式：验证入库完整性
@@ -553,34 +609,25 @@ async def process_single_day_pipeline(
             logger.success(f"{target_date} 入库完成：{inserted} 条记录")
             result["success"] = True
 
-            # 导出操作
+            # 导出操作 - 不阻塞主任务，在后台异步执行
             if auto_export:
-                async with export_semaphore:
-                    logger.info(f"开始导出 {target_date} 数据")
-                    try:
-                        export_base = Path("data/share")
-                        export_stats = await export_records_to_files(
-                            records=records,
-                            profile=profile,
-                            target_date=target_date,
-                            export_base=export_base,
-                            coord_sets=export_coord_sets,
-                            formats=export_formats,
-                        )
-
-                        if export_stats.get("total", 0) > 0:
-                            result["exported"] = True
-                            logger.success(f"{target_date} 导出完成")
-                        else:
-                            logger.warning(f"{target_date} 导出无数据")
-
-                    except Exception as e:
-                        logger.error(f"{target_date} 导出失败: {e}")
+                # 不复制数据，直接传递引用，但延迟释放
+                result["export_task"] = {
+                    "records": records,  # 直接引用，不复制
+                    "target_date": target_date,
+                    "export_coord_sets": export_coord_sets,
+                    "export_formats": export_formats,
+                }
+                result["delay_cleanup"] = True  # 标记延迟清理
+                logger.info(f"{target_date} 数据准备完成，已加入导出队列")
         else:
             logger.warning(f"{target_date} 入库失败")
 
-        # 及时释放内存
-        del records, stats
+        # 及时释放内存（除非有导出任务延迟清理）
+        if not result.get("delay_cleanup", False):
+            del records, stats
+        else:
+            del stats  # 只删除stats，records由export_task引用，导出完成后清理
         gc.collect()
 
         final_memory = get_memory_usage()
@@ -598,6 +645,348 @@ async def process_single_day_pipeline(
     return result
 
 
+class ProgressTracker:
+    """进度跟踪器"""
+
+    def __init__(self, total_days: int):
+        self.total_days = total_days
+        self.completed_days = 0
+        self.successful_days = 0
+        self.failed_days = 0
+        self.total_records = 0
+        self.total_conversion_errors = 0
+        self.exported_days = 0
+        self.failed_day_list = []
+        self.lock = threading.Lock()
+
+    def update(self, result):
+        """更新进度"""
+        with self.lock:
+            self.completed_days += 1
+
+            if isinstance(result, Exception):
+                self.failed_days += 1
+                return
+
+            if not isinstance(result, dict):
+                self.failed_days += 1
+                return
+
+            if result.get("success", False):
+                self.successful_days += 1
+                self.total_records += result.get("records_count", 0)
+                self.total_conversion_errors += result.get("conversion_errors", 0)
+                # 不在这里更新exported_days，由导出任务完成后更新
+            else:
+                self.failed_days += 1
+                date_obj = result.get("date")
+                if date_obj:
+                    self.failed_day_list.append(date_obj.strftime("%Y-%m-%d"))
+
+    def get_status(self) -> str:
+        """获取当前状态字符串"""
+        return (
+            f"进度: {self.completed_days}/{self.total_days} "
+            f"(成功: {self.successful_days}, 失败: {self.failed_days}) "
+            f"记录: {self.total_records:,}"
+        )
+
+
+async def process_export_task(export_task, profile, export_semaphore):
+    """
+    处理单个导出任务 - 优化内存管理
+    """
+    target_date = export_task["target_date"]
+    records = export_task["records"]
+    export_coord_sets = export_task["export_coord_sets"]
+    export_formats = export_task["export_formats"]
+
+    try:
+        async with export_semaphore:
+            logger.info(f"开始导出 {target_date} 数据")
+            export_base = Path("data/share")
+            export_stats = await export_records_to_files(
+                records=records,
+                profile=profile,
+                target_date=target_date,
+                export_base=export_base,
+                coord_sets=export_coord_sets,
+                formats=export_formats,
+            )
+
+            if export_stats.get("total", 0) > 0:
+                logger.success(f"✓ {target_date} 导出完成")
+                return True
+            else:
+                logger.warning(f"⚠ {target_date} 导出无数据")
+                return False
+
+    except Exception as e:
+        logger.error(f"✗ {target_date} 导出失败: {e}")
+        return False
+    finally:
+        # 立即清理导出任务的数据，释放内存
+        try:
+            del export_task["records"]  # 删除数据引用
+            del records  # 删除本地引用
+        except:
+            pass
+        gc.collect()  # 强制垃圾回收
+
+
+async def process_dates_with_dynamic_scheduling(
+    profile: DatasetProfile,
+    dates: List[date],
+    auto_export: bool = True,
+    export_coord_sets: list = ["raw", "wgs84"],
+    export_formats: list = ["csv", "geojson"],
+    atomic_mode: bool = False,
+    max_concurrent_days: int = 3,
+):
+    """
+    使用动态调度处理日期列表，避免慢任务阻塞整个批次
+    导出操作独立调度，不阻塞数据获取和入库
+    """
+    conn_str = settings.get_conn_str()
+    tracker = ProgressTracker(len(dates))
+
+    # 创建信号量来控制并发数
+    fetch_semaphore = asyncio.Semaphore(settings.DAYS_CONCURRENCY)
+    export_semaphore = asyncio.Semaphore(settings.EXPORT_MAX_WORKERS)
+
+    # 导出任务队列 - 限制队列大小以控制内存使用
+    max_export_queue_size = min(max_concurrent_days * 2, 10)  # 限制队列大小
+    export_queue = asyncio.Queue(maxsize=max_export_queue_size)
+    export_tasks = set()  # 正在进行的导出任务
+
+    # 创建进度显示任务
+    async def progress_reporter():
+        """定期报告进度和内存使用情况"""
+        while (
+            tracker.completed_days < tracker.total_days
+            or not export_queue.empty()
+            or export_tasks
+        ):
+            await asyncio.sleep(30)  # 每30秒报告一次
+            export_pending = export_queue.qsize() + len(export_tasks)
+            current_memory = get_memory_usage()
+            status = tracker.get_status()
+            if export_pending > 0:
+                status += f", 导出队列: {export_pending}"
+            status += f", 内存: {current_memory:.1f}MB"
+            logger.info(status)
+
+    # 导出任务处理器
+    async def export_worker():
+        """导出任务工作进程 - 及时清理完成的任务"""
+        while True:
+            try:
+                # 先清理已完成的导出任务
+                completed_tasks = {task for task in export_tasks if task.done()}
+                for task in completed_tasks:
+                    try:
+                        result = await task
+                        if result:
+                            tracker.exported_days += 1
+                    except Exception as e:
+                        logger.error(f"导出任务异常: {e}")
+                    finally:
+                        export_tasks.discard(task)
+
+                # 等待新的导出任务
+                export_task = await asyncio.wait_for(export_queue.get(), timeout=1.0)
+
+                # 创建导出任务
+                task = asyncio.create_task(
+                    process_export_task(export_task, profile, export_semaphore)
+                )
+                export_tasks.add(task)
+
+                # 标记队列任务完成
+                export_queue.task_done()
+
+            except asyncio.TimeoutError:
+                # 检查是否所有主任务都完成了
+                if (
+                    tracker.completed_days >= tracker.total_days
+                    and export_queue.empty()
+                ):
+                    break
+            except Exception as e:
+                logger.error(f"导出工作进程错误: {e}")
+
+    # 启动后台任务
+    progress_task = asyncio.create_task(progress_reporter())
+    export_worker_task = asyncio.create_task(export_worker())
+
+    try:
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=60)
+        ) as session:
+
+            # 创建任务队列
+            pending_tasks = set()
+            date_iter = iter(dates)
+
+            # 初始填充任务队列
+            for _ in range(min(max_concurrent_days, len(dates))):
+                try:
+                    target_date = next(date_iter)
+                    task = asyncio.create_task(
+                        process_single_day_pipeline(
+                            session=session,
+                            target_date=target_date,
+                            profile=profile,
+                            conn_str=conn_str,
+                            auto_export=auto_export,
+                            export_coord_sets=export_coord_sets,
+                            export_formats=export_formats,
+                            fetch_semaphore=fetch_semaphore,
+                            export_semaphore=None,  # 不传递export_semaphore，导出独立处理
+                            atomic_mode=atomic_mode,
+                        )
+                    )
+                    # 使用回调函数添加日期标识
+                    task.add_done_callback(
+                        lambda t, d=target_date: setattr(t, "_target_date", d)
+                    )
+                    pending_tasks.add(task)
+                except StopIteration:
+                    break
+
+            # 动态处理完成的任务
+            while pending_tasks:
+                # 等待任何一个任务完成
+                done, pending_tasks = await asyncio.wait(
+                    pending_tasks, return_when=asyncio.FIRST_COMPLETED
+                )
+
+                # 处理完成的任务
+                for task in done:
+                    target_date = getattr(task, "_target_date", None)
+                    try:
+                        result = await task
+                        tracker.update(result)
+
+                        # 显示单个任务完成信息
+                        if target_date:
+                            date_str = target_date.strftime("%Y-%m-%d")
+                            if isinstance(result, dict) and result.get("success"):
+                                records_count = result.get("records_count", 0)
+                                logger.success(
+                                    f"✓ {date_str} 完成: {records_count:,} 条记录"
+                                )
+
+                                # 检查是否有导出任务需要处理
+                                if auto_export and "export_task" in result:
+                                    # 如果队列满了，等待队列有空间（避免内存无限增长）
+                                    try:
+                                        await asyncio.wait_for(
+                                            export_queue.put(result["export_task"]),
+                                            timeout=5.0,
+                                        )
+                                        logger.debug(f"{date_str} 已加入导出队列")
+                                    except asyncio.TimeoutError:
+                                        logger.warning(
+                                            f"{date_str} 导出队列满，跳过导出"
+                                        )
+                                        # 队列满时释放数据
+                                        del result["export_task"]["records"]
+                                elif auto_export:
+                                    # 如果启用导出但没有导出任务（比如无数据），标记为已导出
+                                    tracker.exported_days += 1
+                            else:
+                                logger.error(f"✗ {date_str} 失败")
+                        else:
+                            logger.error("✗ 未知日期任务失败")
+
+                    except Exception as e:
+                        date_str = (
+                            target_date.strftime("%Y-%m-%d")
+                            if target_date
+                            else "未知日期"
+                        )
+                        logger.error(f"✗ {date_str} 异常: {e}")
+                        tracker.update(e)
+
+                # 添加新任务以保持并发数
+                while len(pending_tasks) < max_concurrent_days:
+                    try:
+                        target_date = next(date_iter)
+                        task = asyncio.create_task(
+                            process_single_day_pipeline(
+                                session=session,
+                                target_date=target_date,
+                                profile=profile,
+                                conn_str=conn_str,
+                                auto_export=auto_export,
+                                export_coord_sets=export_coord_sets,
+                                export_formats=export_formats,
+                                fetch_semaphore=fetch_semaphore,
+                                export_semaphore=None,  # 不传递export_semaphore，导出独立处理
+                                atomic_mode=atomic_mode,
+                            )
+                        )
+                        task.add_done_callback(
+                            lambda t, d=target_date: setattr(t, "_target_date", d)
+                        )
+                        pending_tasks.add(task)
+                    except StopIteration:
+                        break
+
+                # 强制垃圾回收
+                gc.collect()
+
+    finally:
+        # 等待所有导出任务完成
+        if auto_export:
+            logger.info("等待导出任务完成...")
+            await export_queue.join()  # 等待队列中的所有任务完成
+
+            # 等待正在进行的导出任务完成并清理
+            remaining_tasks = list(export_tasks)
+            if remaining_tasks:
+                export_results = await asyncio.gather(
+                    *remaining_tasks, return_exceptions=True
+                )
+                for export_result in export_results:
+                    if export_result is True:
+                        tracker.exported_days += 1
+                    elif isinstance(export_result, Exception):
+                        logger.error(f"导出任务异常: {export_result}")
+                # 清理任务集合
+                export_tasks.clear()
+
+        # 取消后台任务
+        progress_task.cancel()
+        export_worker_task.cancel()
+
+        try:
+            await progress_task
+        except asyncio.CancelledError:
+            pass
+
+        try:
+            await export_worker_task
+        except asyncio.CancelledError:
+            pass
+
+        # 最终内存清理
+        gc.collect()
+        final_memory = get_memory_usage()
+        logger.info(f"动态调度完成，最终内存: {final_memory:.1f}MB")
+
+    # 返回最终统计
+    return {
+        "total_days": tracker.total_days,
+        "successful_days": tracker.successful_days,
+        "total_records": tracker.total_records,
+        "total_conversion_errors": tracker.total_conversion_errors,
+        "exported_days": tracker.exported_days,
+        "failed_days": tracker.failed_day_list,
+    }
+
+
 async def process_date_range(
     profile: DatasetProfile,
     start_date: date,
@@ -610,7 +999,7 @@ async def process_date_range(
     max_concurrent_days: Optional[int] = None,
 ):
     """
-    处理日期范围内的数据
+    处理日期范围内的数据 - 使用动态调度优化版本
     missing_only: 只处理缺失的日期
     atomic_mode: 原子性模式，确保数据完整性
     max_concurrent_days: 最大并发天数
@@ -647,114 +1036,33 @@ async def process_date_range(
             current += timedelta(days=1)
         logger.info(f"将处理完整日期范围：{len(dates)} 天")
 
-    total_stats = {
-        "total_days": len(dates),
-        "successful_days": 0,
-        "total_records": 0,
-        "total_conversion_errors": 0,
-        "exported_days": 0,
-        "failed_days": [],
-    }
-
     mode_desc = "原子性" if atomic_mode else "标准"
     logger.info(
         f"开始{mode_desc}处理 {len(dates)} 天数据，最大并发天数: {max_concurrent_days}"
     )
 
-    async with aiohttp.ClientSession(
-        timeout=aiohttp.ClientTimeout(total=60)
-    ) as session:
-
-        # 分批处理日期，避免内存爆炸
-        for batch_start in range(0, len(dates), max_concurrent_days):
-            batch_end = min(batch_start + max_concurrent_days, len(dates))
-            batch_dates = dates[batch_start:batch_end]
-
-            memory_before = get_memory_usage()
-            logger.info(
-                f"处理批次: {batch_dates[0]} 到 {batch_dates[-1]}，"
-                f"处理前内存: {memory_before:.1f}MB"
-            )
-
-            # 创建信号量来控制并发数
-            fetch_semaphore = asyncio.Semaphore(settings.DAYS_CONCURRENCY)
-            export_semaphore = asyncio.Semaphore(settings.EXPORT_MAX_WORKERS)
-
-            # 创建当前批次的处理任务
-            tasks = []
-            for target_date in batch_dates:
-                task = process_single_day_pipeline(
-                    session=session,
-                    target_date=target_date,
-                    profile=profile,
-                    conn_str=conn_str,
-                    auto_export=auto_export,
-                    export_coord_sets=export_coord_sets,
-                    export_formats=export_formats,
-                    fetch_semaphore=fetch_semaphore,
-                    export_semaphore=export_semaphore,
-                    atomic_mode=atomic_mode,
-                )
-                tasks.append(task)
-
-            # 并发执行当前批次的任务
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            # 统计当前批次结果
-            for target_date, result in zip(batch_dates, results):
-                try:
-                    if isinstance(result, Exception):
-                        logger.error(f"{target_date} 处理失败: {result}")
-                        total_stats["failed_days"].append(
-                            target_date.strftime("%Y-%m-%d")
-                        )
-                        continue
-
-                    if not isinstance(result, dict):
-                        logger.error(f"{target_date} 返回结果格式错误: {result}")
-                        total_stats["failed_days"].append(
-                            target_date.strftime("%Y-%m-%d")
-                        )
-                        continue
-
-                    if result.get("success", False):
-                        total_stats["successful_days"] += 1
-                        total_stats["total_records"] += result.get("records_count", 0)
-                        total_stats["total_conversion_errors"] += result.get(
-                            "conversion_errors", 0
-                        )
-                        if result.get("exported", False):
-                            total_stats["exported_days"] += 1
-                    else:
-                        total_stats["failed_days"].append(
-                            target_date.strftime("%Y-%m-%d")
-                        )
-
-                except Exception as e:
-                    logger.error(f"处理 {target_date} 结果时发生错误: {e}")
-                    total_stats["failed_days"].append(target_date.strftime("%Y-%m-%d"))
-
-            # 强制垃圾回收，释放当前批次的内存
-            del tasks, results
-            gc.collect()
-
-            memory_after = get_memory_usage()
-            logger.info(
-                f"批次处理完成，处理后内存: {memory_after:.1f}MB，"
-                f"内存变化: {memory_after - memory_before:+.1f}MB"
-            )
-
-    logger.success(
-        f"{mode_desc}处理完成！成功: {total_stats['successful_days']}/{total_stats['total_days']} 天，"
-        f"总记录: {total_stats['total_records']:,}，"
-        f"坐标转换错误: {total_stats['total_conversion_errors']:,}，"
-        f"导出: {total_stats['exported_days']} 天"
+    # 使用新的动态调度处理
+    stats = await process_dates_with_dynamic_scheduling(
+        profile=profile,
+        dates=dates,
+        auto_export=auto_export,
+        export_coord_sets=export_coord_sets,
+        export_formats=export_formats,
+        atomic_mode=atomic_mode,
+        max_concurrent_days=max_concurrent_days,
     )
 
-    if total_stats["failed_days"]:
-        logger.warning(f"失败的日期: {', '.join(total_stats['failed_days'])}")
+    logger.success(
+        f"{mode_desc}处理完成！成功: {stats['successful_days']}/{stats['total_days']} 天，"
+        f"总记录: {stats['total_records']:,}，"
+        f"坐标转换错误: {stats['total_conversion_errors']:,}，"
+        f"导出: {stats['exported_days']} 天"
+    )
 
-    return total_stats
+    if stats["failed_days"]:
+        logger.warning(f"失败的日期: {', '.join(stats['failed_days'])}")
+
+    return stats
 
 
 def main():
@@ -799,7 +1107,7 @@ def main():
     ap.add_argument(
         "--atomic-mode",
         action="store_true",
-        default=False,
+        default=True,
         help="启用原子性模式（确保数据完整性，适用于重要数据）",
     )
     ap.add_argument(
@@ -899,19 +1207,26 @@ def main():
     )
 
     # 运行主程序
-    stats = asyncio.run(
-        process_date_range(
-            profile=profile,
-            start_date=start_date,
-            end_date=end_date,
-            auto_export=args.auto_export,
-            export_coord_sets=export_coord_sets,
-            export_formats=export_formats,
-            missing_only=args.missing_only,
-            atomic_mode=args.atomic_mode,
-            max_concurrent_days=max_concurrent_days,
+    try:
+        stats = asyncio.run(
+            process_date_range(
+                profile=profile,
+                start_date=start_date,
+                end_date=end_date,
+                auto_export=args.auto_export,
+                export_coord_sets=export_coord_sets,
+                export_formats=export_formats,
+                missing_only=args.missing_only,
+                atomic_mode=args.atomic_mode,
+                max_concurrent_days=max_concurrent_days,
+            )
         )
-    )
+    finally:
+        # 清理线程池
+        global _thread_pool
+        if _thread_pool is not None:
+            _thread_pool.shutdown(wait=True)
+            _thread_pool = None
 
     final_memory = get_memory_usage()
     logger.info(
