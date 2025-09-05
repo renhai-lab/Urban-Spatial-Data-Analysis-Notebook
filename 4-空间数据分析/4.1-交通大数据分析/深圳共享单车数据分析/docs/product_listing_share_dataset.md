@@ -48,110 +48,9 @@
 | 大数据批处理 / 列存 | Parquet / GeoParquet | （如提供）高效压缩与向量化读取 |
 | Python 空间分析 | GeoParquet / GeoJSON | GeoParquet 若提供优先 |
 
-## 导入任意数据库 / 引擎示例
-> 以下命令需根据你实际的文件名与路径替换；演示以单日解压后的 CSV（含 WGS84 坐标）为例。
-
-### PostgreSQL / PostGIS
-```sql
-CREATE TABLE bike_trips (
-  user_id text,
-  company_id text,
-  start_time_cn text,
-  end_time_cn text,
-  start_lng_wgs84 double precision,
-  start_lat_wgs84 double precision,
-  end_lng_wgs84 double precision,
-  end_lat_wgs84 double precision
-);
-\copy bike_trips FROM 'bike_data_20210101_wgs84.csv' CSV HEADER ENCODING 'UTF8';
-```
-（如需空间列，可使用 `ST_SetSRID(ST_MakePoint(start_lng_wgs84,start_lat_wgs84),4326)` 衍生 Point 列）
-
-### DuckDB（命令行 / Python）
-```sql
-CREATE TABLE bike_trips AS
-SELECT * FROM read_csv_auto('bike_data_20210101_wgs84.csv');
-```
-
-### ClickHouse
-```sql
-CREATE TABLE bike_trips (
-  user_id String,
-  company_id String,
-  start_time_cn String,
-  end_time_cn String,
-  start_lng_wgs84 Float64,
-  start_lat_wgs84 Float64,
-  end_lng_wgs84 Float64,
-  end_lat_wgs84 Float64
-) ENGINE = MergeTree ORDER BY (start_time_cn);
-
--- 导入 (替换为本地实际路径)
-INSERT INTO bike_trips FORMAT CSVWithNames
-< bike_data_20210101_wgs84.csv;
-```
-
-### SQLite（命令行）
-```bash
-sqlite3 bike.db <<'EOF'
-.mode csv
-.import bike_data_20210101_wgs84.csv bike_trips
-EOF
-```
-
-### Pandas / GeoPandas（Python）
-```python
-import zipfile, pandas as pd
-from pathlib import Path
-
-zip_path = Path('data/share/wgs84/csv_zip/bike_data_20210101_wgs84.zip')
-with zipfile.ZipFile(zip_path) as z:
-    with z.open(z.namelist()[0]) as f:
-        df = pd.read_csv(f)
-print(df.head())
-```
-（若需 GeoDataFrame：使用 `geopandas.points_from_xy(df.start_lng_wgs84, df.start_lat_wgs84, crs="EPSG:4326")`）
-
-## 可视化快速路径
-| 工具 | 步骤 | 适用人群 |
-|------|------|----------|
-| kepler.gl | 打开官网 → 拖入解压后的 `.geojson` | 新手 / 快速地图 |
-| geojson.io | 打开网址 → 拖文件 | 超轻量预览 |
-| QGIS | 添加矢量图层 → 选 GeoJSON | 进阶空间分析 |
-
-（时间动画：在 kepler.gl 中以 `start_time_cn` 作为时间字段加 Filter 即可。）
-
-## 坐标与精度提示
-- `wgs84/` 目录：适合与其它标准数据叠加；经纬度字段或导出的 geometry 均为 EPSG:4326。
-- `raw/` 目录：未标准化；仅用于快速演示；用于严谨分析需先转换。
-
-## 性能与使用建议
-| 目标 | 建议 |
-|------|------|
-| 大批量统计 | 先导入列式（DuckDB / ClickHouse / Parquet）再聚合 |
-| 地图点渲染卡顿 | 采样（每 50~200 行取 1）或做网格聚合（Hex / Quadbin） |
-| 追加更多日期 | 保持同一字段模式即可追加写入 |
-| 空间分析 | 优先使用 WGS84 列；必要时建立空间索引（PostGIS GIST） |
-
-## 合规与限制（务必阅读）
-- 数据来源：**[深圳市政府数据开放平台](https://opendata.sz.gov.cn/)发布的**共享单车企业每日订单表**了，数据量包含 2.4 亿条数据。
-- 使用范围：科研、教学、学习、公共政策分析等合规用途；严禁试图还原个人真实身份。
-- 若你基于数据发布成果，请注明来源并遵守平台条款。
-- 原始数据存在：少量日期缺失、异常行程（极短 / 坐标偏移）等情况属常见客观现象。
-
-## 免责声明（交付侧）
-| 项目 | 说明 |
-|------|------|
-| 日期覆盖 | 以随包日期列表 CSV 记载为准（请交付时确保文件完整） |
-| 行数规模 | 若未明确标注“全量 2.4 亿”，则默认为子集或阶段性导出 |
-| 坐标偏移 | raw 目录存在偏移属正常，不构成质量问题 |
-| 数据真实度 | 基于公开平台输出，未额外做语义修补 |
-| 售后 | 若链接失效，可在约定窗口内申请补发（需自定义填充） |
-
-> 若计划售卖：请自行补充定价、发货方式（例如：购买后私信提供云盘链接）、售后策略及会员优惠说明。下面提供可填模板：
 
 ## 发货 
-- 发货：购买后平台私信发送提取连接，提供阿里云盘（还在上传）、夸克网盘和百度网盘的链接。
+- 发货：购买后平台私信发送提取连接，提供阿里云盘、夸克网盘和百度网盘的链接。
 
 ## FAQ（可自行裁剪）
 **Q：点与底图有偏移？**  
@@ -177,8 +76,8 @@ A：用 GeoPandas 读取 CSV，构造 Point 列后另存为 GeoParquet / Shapefi
 
 **博客相关文章：**
 
-- [深圳市共享单车数据分析【文末附共享单车数据集清单】](/blog/city-transportation/shenzhen-shared-bike-dataset-list)
+- [深圳市共享单车数据分析【文末附共享单车数据集清单】](https://www.renhai.online/blog/city-transportation/shenzhen-shared-bike-dataset-list)
 
-- [使用Python获取某个时间段的深圳共享单车数据集完整教程【纯小白向】附常见问题、可导出为csv](/blog/city-transportation/深圳共享单车数据获取教程)
+- [使用Python获取某个时间段的深圳共享单车数据集完整教程【纯小白向】附常见问题、可导出为csv](https://www.renhai.online/blog/city-transportation/深圳共享单车数据获取教程)
 
-- [2.4 亿条深圳共享单车数据集获取完整教程【开发者版】](/blog/city-transportation/shenzhen-shared-bike-data-acquisition-tutorial-multithreaded-concurrent-version-for-developers)
+- [2.4 亿条深圳共享单车数据集获取完整教程【开发者版】](https://www.renhai.online/blog/city-transportation/shenzhen-shared-bike-data-acquisition-tutorial-multithreaded-concurrent-version-for-developers)
