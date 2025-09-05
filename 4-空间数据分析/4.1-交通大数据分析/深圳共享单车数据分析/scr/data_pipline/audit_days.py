@@ -1,8 +1,10 @@
 """
 按天核查工具：统计数据库内每日条数，找出缺失天/异常天，并导出 CSV。
 
-用法：直接运行本脚本将读取 settings 与当前 profile，范围为 DATA_START_DATE ~ DATA_END_DATE。
-uv run python -m scr.data_pipline.audit_days
+用法：
+- 基本用法：uv run python -m scr.data_pipline.audit_days
+- 跳过空数据天的API对比：uv run python -m scr.data_pipline.audit_days --skip-empty-days
+
 输出：
 - （可以查看每天有多少数据）data/audit/daily_counts.csv：包含 day,cnt 两列
 - （主要看这个）data/audit/daily_counts_with_api.csv ：包含 day,db_count,api_total，delta（与数据库的差别）
@@ -10,12 +12,14 @@ uv run python -m scr.data_pipline.audit_days
 
 注意：
 - 天粒度采用北京时间归档：(latest_date_column at time zone 'Asia/Shanghai')::date
+- 使用 --skip-empty-days 参数可以跳过数据库中没有数据的天数（cnt=0），避免不必要的API调用
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import List
+import argparse
 
 from loguru import logger
 import psycopg
@@ -164,7 +168,7 @@ def detect_low_days(df: pd.DataFrame, ratio: float = 0.5) -> List[str]:
     return [d.strftime("%Y-%m-%d") for d in low["day"].tolist()]
 
 
-def main():
+def main(skip_empty_days: bool = False):
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
 
@@ -214,9 +218,22 @@ def main():
 
     # 若有 APP_KEY，进一步调 API total 做对比
     if settings.APP_KEY and settings.APP_KEY != "YOUR_APP_KEY_HERE":
-        logger.info("开始调用 API 获取每日 total 进行对比（异步并发）…")
-        days_fmt = pd.to_datetime(df["day"]).dt.strftime("%Y-%m-%d").tolist()
-        days_str8 = pd.to_datetime(df["day"]).dt.strftime("%Y%m%d").tolist()
+        if skip_empty_days:
+            # 过滤掉数据库中没有数据的天数（cnt=0）
+            df_filtered = df[df["cnt"] > 0].copy()
+            if df_filtered.empty:
+                logger.info("所有天数在数据库中都没有数据，跳过API对比。")
+                return
+            else:
+                logger.info(
+                    f"开始调用 API 获取每日 total 进行对比（异步并发）…过滤空数据天，实际对比 {len(df_filtered)} 天"
+                )
+        else:
+            logger.info("开始调用 API 获取每日 total 进行对比（异步并发）…")
+            df_filtered = df.copy()
+
+        days_fmt = pd.to_datetime(df_filtered["day"]).dt.strftime("%Y-%m-%d").tolist()
+        days_str8 = pd.to_datetime(df_filtered["day"]).dt.strftime("%Y%m%d").tolist()
         api_totals: list[int | None] = asyncio.run(
             fetch_api_totals_for_days(days_str8, profile, concurrency=30)
         )
@@ -234,7 +251,7 @@ def main():
         df_api = pd.DataFrame(
             {
                 "day": days_fmt,
-                "db_count": [int(v) for v in df["cnt"].tolist()],
+                "db_count": [int(v) for v in df_filtered["cnt"].tolist()],
                 "api_total": norm_api_totals,
             }
         )
@@ -268,4 +285,14 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description="按天核查工具：统计数据库内每日条数，找出缺失天/异常天"
+    )
+    parser.add_argument(
+        "--skip-empty-days",
+        action="store_true",
+        help="跳过数据库中没有数据的天数（cnt=0），不进行API对比",
+    )
+
+    args = parser.parse_args()
+    main(skip_empty_days=args.skip_empty_days)

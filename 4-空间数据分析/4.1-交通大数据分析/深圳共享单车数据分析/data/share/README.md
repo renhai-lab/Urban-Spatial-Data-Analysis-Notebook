@@ -16,31 +16,17 @@
 
 - **CSV（zip）**：推荐给表格分析/简单查看的用户；体积较大，已压缩
 - **GeoJSON（zip）**：推荐给地图可视化/空间分析的用户；体积较大，已压缩；几何为对应目录的"起点"坐标
-- **Parquet**：推荐大数据分析；无压缩但体积小，读取快
-- **GeoParquet**：推荐地理大数据分析；包含原生空间几何类型单车数据，支持双坐标系和多种格式。
 
 ## 目录结构
 
 ```text
 data/share/
-  wgs84/                          # WGS84 标准坐标系（推荐用于分析）
-    geojson_zip/
-      YYYY-MM-DD.geojson.zip      # 地理空间数据，适合地图可视化
-    csv_zip/
-      YYYY-MM-DD.csv.zip          # 表格数据，适合统计分析
-    parquet/
-      YYYY-MM-DD.parquet          # 列式存储，适合大数据分析
-    geoparquet/
-      YYYY-MM-DD.parquet          # 空间列式存储，适合地理大数据
-  raw/                            # 原始坐标系（BD09LL/GCJ-02）
-    geojson_zip/
-      YYYY-MM-DD.geojson.zip      # 原始坐标地理数据，快速浏览用
-    csv_zip/
-      YYYY-MM-DD.csv.zip          # 原始坐标表格数据
-    parquet/
-      YYYY-MM-DD.parquet          # 原始坐标列式存储
-    geoparquet/
-      YYYY-MM-DD.parquet          # 原始坐标空间列式存储
+  wgs84/                    # WGS84坐标系（推荐用于分析）
+    csv_zip/                # 每天一个 zip，里面是 CSV 表格
+    geojson_zip/            # 每天一个 zip，里面是 GeoJSON（可以直接做地图）
+  raw/                      # 原始坐标系（快速浏览用）
+    csv_zip/                # 同上
+    geojson_zip/            # 同上
 ```
 
 格式选择建议（默认仅提供两种）：
@@ -61,12 +47,12 @@ data/share/
 #### WGS84 目录
 - **start_lng_wgs84/start_lat_wgs84**：起点经纬度（WGS84坐标系）
 - **end_lng_wgs84/end_lat_wgs84**：终点经纬度（WGS84坐标系）
-- **GeoJSON/GeoParquet 几何**：起点坐标的空间几何
+- **GeoJSON 几何**：起点坐标的空间几何
 
 #### RAW 目录  
 - **start_lng_raw/start_lat_raw**：起点经纬度（原始坐标系）
 - **end_lng_raw/end_lat_raw**：终点经纬度（原始坐标系）
-- **GeoJSON/GeoParquet 几何**：起点坐标的空间几何（原始坐标系）
+- **GeoJSON/Gearquet 几何**：起点坐标的空间几何（原始坐标系）
 
 ## 数据来源与处理
 
@@ -77,25 +63,6 @@ data/share/
   2. 同步完成坐标系转换（BD09LL/GCJ-02 → WGS84）
   3. TimescaleDB 分区存储
   4. 按需导出双坐标系数据
-## 如何导出数据
-
-```bash
-# 导出 WGS84 坐标数据
-uv run python -m scr.data_pipline.export_share --start 20210101 --end 20210102 \
-  --coord-sets wgs84 --formats csv,geojson --batch 50000 --out data/share
-
-# 导出原始坐标数据  
-uv run python -m scr.data_pipline.export_share --start 20210101 --end 20210102 \
-  --coord-sets raw --formats csv,geojson --batch 50000 --out data/share
-
-# 同时导出两套坐标系
-uv run python -m scr.data_pipline.export_share --start 20210101 --end 20210102 \
-  --coord-sets raw,wgs84 --formats csv,geojson --batch 50000 --out data/share
-
-# 导出所有格式（包括 Parquet）
-uv run python -m scr.data_pipline.export_share --start 20210101 --end 20210102 \
-  --coord-sets wgs84 --formats csv,geojson,parquet,geoparquet --batch 50000 --out data/share
-```
 
 ## 使用建议
 
