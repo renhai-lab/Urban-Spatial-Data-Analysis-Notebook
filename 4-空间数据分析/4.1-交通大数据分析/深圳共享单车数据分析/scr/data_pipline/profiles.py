@@ -1,9 +1,18 @@
 """
-优化版本的数据集配置文件，支持：
-1. TimescaleDB分区
-2. 实时坐标转换（GCJ-02 -> WGS84）
-3. 简化表结构
-4. 集成按天导出
+数据集配置文件模块
+
+该模块定义了不同数据集的配置和处理逻辑，支持：
+1. TimescaleDB 时序数据库分区配置
+2. 实时坐标转换（GCJ-02 转 WGS84）
+3. 数据表结构简化和优化
+4. 按天导出功能集成
+5. 多数据源支持（共享单车、气象格点等）
+
+主要包含的数据集：
+- 深圳共享单车数据（bike）
+- 深圳气象格点数据（weather_grid）
+
+每个数据集都通过 DatasetProfile 类定义其特定的处理逻辑和数据库配置。
 """
 
 from dataclasses import dataclass
@@ -16,6 +25,14 @@ from .coords import gcj02_to_wgs84
 
 @dataclass
 class IndexSpec:
+    """
+    数据库索引规格定义
+    
+    Attributes:
+        name: 索引名称
+        columns_sql: 索引列的 SQL 定义
+        using: 索引类型（如 'btree', 'gist' 等），可选
+    """
     name: str
     columns_sql: str
     using: Optional[str] = None
@@ -23,6 +40,25 @@ class IndexSpec:
 
 @dataclass
 class DatasetProfile:
+    """
+    数据集配置基类
+    
+    定义了每个数据集的基本配置信息，包括 API 接口、数据库表结构、
+    索引配置、时序分区设置等。子类需要实现 prepare_record 方法
+    来处理具体的数据记录。
+    
+    Attributes:
+        name: 数据集名称（用于日志显示）
+        api_url: 数据获取 API 地址
+        table_name: 数据库表名
+        copy_columns: COPY 操作使用的列名列表
+        table_columns_sql: 创建表时的列定义 SQL
+        indexes: 索引配置列表
+        latest_date_column: 用于查询最新日期的时间列名
+        enable_timescale: 是否启用 TimescaleDB 分区
+        partition_column: 时序分区的时间列名
+        partition_interval: 分区时间间隔
+    """
     name: str
     api_url: str
     table_name: str
@@ -30,27 +66,49 @@ class DatasetProfile:
     table_columns_sql: str
     indexes: List[IndexSpec]
     latest_date_column: str
-    # 新增：是否启用TimescaleDB分区
+    # 时序数据库配置
     enable_timescale: bool = True
-    # 新增：分区时间列
     partition_column: str = "start_time"
-    # 新增：分区间隔（如 '1 day', '1 week'）
     partition_interval: str = "1 day"
 
-    def prepare_record(self, record: dict):  # pragma: no cover - overridden
+    def prepare_record(self, record: dict):  # pragma: no cover - 子类实现
+        """
+        处理单条记录的抽象方法
+        
+        子类必须实现此方法来处理从 API 获取的原始数据记录，
+        包括数据清洗、格式转换、坐标转换等操作。
+        
+        Args:
+            record: 从 API 获取的原始数据记录
+            
+        Returns:
+            处理后的数据记录，格式需要与 copy_columns 对应
+        """
         raise NotImplementedError
 
     def field_labels(self) -> Dict[str, str]:
-        """Return a mapping of raw API field names to Chinese descriptions."""
+        """
+        返回字段名到中文描述的映射
+        
+        用于数据导出时的字段标签显示。
+        
+        Returns:
+            Dict[str, str]: 字段名到中文描述的映射字典
+        """
         return {}
 
     def get_timescale_setup_sql(self) -> str:
-        """返回TimescaleDB设置SQL"""
+        """
+        生成 TimescaleDB 分区设置的 SQL 语句
+        
+        Returns:
+            str: TimescaleDB 分区设置的 SQL 语句，如果未启用则返回空字符串
+        """
         if not self.enable_timescale:
             return ""
 
         return f"""
-        -- 创建hypertable（如果尚未创建）
+        -- 创建 TimescaleDB 超表（如果尚未创建）
         SELECT create_hypertable('{self.table_name}', '{self.partition_column}', 
                                  chunk_time_interval => INTERVAL '{self.partition_interval}',
                                  if_not_exists => TRUE);
@@ -58,7 +116,17 @@ class DatasetProfile:
 
 
 class BikeProfile(DatasetProfile):
-    """优化版本的共享单车配置：实时转换坐标，简化表结构"""
+    """
+    深圳共享单车数据集配置类
+    
+    针对深圳市政府开放数据平台的共享单车数据进行优化配置：
+    - 实时坐标转换（GCJ-02 转 WGS84）  
+    - 简化的表结构设计
+    - TimescaleDB 时序分区支持
+    - 完整的字段中文标签
+    
+    数据来源：深圳市政府数据开放平台 - 互联网租赁自行车停放点位数据
+    """
 
     def __init__(self):
         super().__init__(
@@ -125,17 +193,32 @@ class BikeProfile(DatasetProfile):
         )
 
     def prepare_record(self, record: dict):
-        """准备记录，同时保存原始坐标和转换后的WGS84坐标"""
+        """
+        处理单条共享单车记录
+        
+        执行以下操作：
+        1. 解析起止时间（北京时间转UTC）
+        2. 提取原始坐标信息
+        3. 执行坐标转换（GCJ-02 -> WGS84）
+        4. 生成 PostGIS 兼容的 WKT 格式坐标
+        
+        Args:
+            record: 从 API 获取的原始数据记录
+            
+        Returns:
+            tuple: 处理后的数据元组，对应 copy_columns 的顺序
+        """
+        # 解析时间字段（北京时间转换为 UTC）
         start_time_utc = parse_dt_beijing(record.get("START_TIME"))
         end_time_utc = parse_dt_beijing(record.get("END_TIME"))
 
-        # 获取原始坐标
+        # 提取原始坐标（假设为 GCJ-02 坐标系）
         slon, slat = to_float(record.get("START_LNG")), to_float(
             record.get("START_LAT")
         )
         elon, elat = to_float(record.get("END_LNG")), to_float(record.get("END_LAT"))
 
-        # 原始坐标WKT
+        # 生成原始坐标的 WKT 格式（PostGIS 兼容）
         start_geom_raw_wkt = None
         if slon is not None and slat is not None:
             start_geom_raw_wkt = f"SRID=4326;POINT({slon} {slat})"
@@ -144,14 +227,14 @@ class BikeProfile(DatasetProfile):
         if elon is not None and elat is not None:
             end_geom_raw_wkt = f"SRID=4326;POINT({elon} {elat})"
 
-        # 转换为WGS84坐标
+        # 执行坐标转换：GCJ-02 -> WGS84
         start_geom_wgs84_wkt = None
         if slon is not None and slat is not None:
             try:
                 wgs_lon, wgs_lat = gcj02_to_wgs84(slon, slat)
                 start_geom_wgs84_wkt = f"SRID=4326;POINT({wgs_lon} {wgs_lat})"
             except Exception as e:
-                # 转换失败则使用原始坐标（可能本身就是WGS84）
+                # 转换失败则使用原始坐标（可能本身就是 WGS84）
                 start_geom_wgs84_wkt = start_geom_raw_wkt
 
         end_geom_wgs84_wkt = None
@@ -163,35 +246,53 @@ class BikeProfile(DatasetProfile):
                 # 转换失败则使用原始坐标
                 end_geom_wgs84_wkt = end_geom_raw_wkt
 
+        # 返回处理后的数据元组
         return (
-            record.get("USER_ID"),
-            record.get("COM_ID"),
-            start_time_utc,
-            end_time_utc,
-            start_geom_raw_wkt,  # start_geom_raw
-            end_geom_raw_wkt,  # end_geom_raw
-            start_geom_wgs84_wkt,  # start_geom_wgs84
-            end_geom_wgs84_wkt,  # end_geom_wgs84
-            "GCJ-02",  # source_crs，默认假设原始数据为GCJ-02
+            record.get("USER_ID"),        # 用户标识
+            record.get("COM_ID"),         # 运营商标识
+            start_time_utc,               # 开始时间（UTC）
+            end_time_utc,                 # 结束时间（UTC）
+            start_geom_raw_wkt,          # 起点原始坐标
+            end_geom_raw_wkt,            # 终点原始坐标
+            start_geom_wgs84_wkt,        # 起点 WGS84 坐标
+            end_geom_wgs84_wkt,          # 终点 WGS84 坐标
+            "GCJ-02",                    # 原始坐标系标识
         )
 
     def field_labels(self) -> Dict[str, str]:
+        """
+        返回字段的中文标签映射
+        
+        用于数据导出和可视化时显示友好的中文字段名。
+        
+        Returns:
+            Dict[str, str]: 字段名到中文描述的映射
+        """
         return {
             "id": "自增主键",
-            "user_id": "用户ID",
-            "company_id": "企业ID",
-            "start_time": "开始时间",
-            "end_time": "结束时间",
-            "start_geom_raw": "起点原始坐标（未转换，Point）",
-            "end_geom_raw": "终点原始坐标（未转换，Point）",
-            "start_geom_wgs84": "起点坐标（WGS84，已转换）",
-            "end_geom_wgs84": "终点坐标（WGS84，已转换）",
-            "source_crs": "原始坐标系标识（默认GCJ-02）",
+            "user_id": "匿名用户标识",
+            "company_id": "运营商标识",
+            "start_time": "骑行开始时间",
+            "end_time": "骑行结束时间",
+            "start_geom_raw": "起点原始坐标（GCJ-02）",
+            "end_geom_raw": "终点原始坐标（GCJ-02）",
+            "start_geom_wgs84": "起点标准坐标（WGS84）",
+            "end_geom_wgs84": "终点标准坐标（WGS84）",
+            "source_crs": "原始坐标系标识",
         }
 
 
 class WeatherGridProfile(DatasetProfile):
-    """天气格点数据配置（已优化）"""
+    """
+    深圳气象格点数据集配置类
+    
+    针对深圳市政府开放数据平台的气象格点数据进行配置：
+    - 网格化气象数据存储
+    - 时序数据分区优化
+    - 多气象要素支持（温度、风速、湿度等）
+    
+    数据来源：深圳市政府数据开放平台 - 气象格点数据
+    """
 
     def __init__(self):
         super().__init__(
