@@ -1,12 +1,27 @@
 """
-最终版数据获取程序，集成：
-1. TimescaleDB分区
+深圳开放数据平台高性能数据获取器（生产版本）
+
+这是针对大规模数据获取优化的生产级数据获取程序，集成了以下核心功能：
+1. TimescaleDB 时序数据库分区优化
 2. 实时坐标转换（GCJ-02 -> WGS84）
-3. 按天导出功能
-4. 内存优化管理
-5. 原子性数据处理
-6. 智能缺失日期检测和补全
-7. 数据完整性验证
+3. 按天导出和内存管理功能
+4. 原子性数据处理保证
+5. 智能缺失日期检测和补全
+6. 完整的数据验证和错误恢复
+
+性能特性：
+- 异步高并发处理，支持数千万条记录
+- 内存使用优化，自动垃圾回收
+- 断点续传，支持中断恢复
+- 完整的进度监控和性能统计
+
+适用场景：
+- 深圳市政府开放数据平台大规模数据获取
+- 长期运行的数据采集任务
+- 需要高可靠性和可恢复性的数据处理流程
+
+作者：renhai-lab
+版本：2024 生产版
 """
 
 import asyncio
@@ -35,8 +50,9 @@ from .db import setup_database, get_latest_date_from_db
 from .export_memory import export_records_to_files
 from .utils import tz_beijing
 
-"""在 Windows 上将事件循环策略切换为 WindowsSelectorEventLoopPolicy，
-以避免 psycopg 异步模式与 ProactorEventLoop 的不兼容问题。"""
+# ===== 平台兼容性设置 =====
+# 在 Windows 平台上切换事件循环策略为 WindowsSelectorEventLoopPolicy，
+# 以避免 psycopg 异步模式与 ProactorEventLoop 的兼容性问题
 if sys.platform.startswith("win") and hasattr(
     asyncio, "WindowsSelectorEventLoopPolicy"
 ):
@@ -44,7 +60,12 @@ if sys.platform.startswith("win") and hasattr(
 
 
 def get_memory_usage():
-    """获取当前进程的内存使用情况（MB）"""
+    """
+    获取当前进程的内存使用情况
+    
+    Returns:
+        float: 内存使用量（MB）
+    """
     process = psutil.Process(os.getpid())
     return process.memory_info().rss / 1024 / 1024
 
