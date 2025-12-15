@@ -1,6 +1,13 @@
 """
-优化版本的按天导出功能，支持raw和wgs84两套坐标系
-参考原始export_share.py的逻辑，并增加内存优化和并发处理
+优化版本的按天导出功能，支持多数据集和多坐标系
+参考原始export_share.py的逻辑，并增加内存优化、并发处理和多profile支持
+
+支持特性：
+- 多坐标系导出（raw/wgs84）
+- 多数据集导出（共享单车、气象数据等）
+- CSV 和 GeoJSON 格式导出
+- 内存优化和流式处理
+- 按 profile 动态适配导出逻辑
 """
 
 from __future__ import annotations
@@ -8,7 +15,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, date, timedelta
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 import json
 import zipfile
 import io
@@ -24,6 +31,7 @@ from psycopg.rows import dict_row
 from loguru import logger
 
 from .config import settings
+from .profiles import get_profile, DatasetProfile
 
 
 def parse_day(s: str) -> date:
@@ -31,9 +39,28 @@ def parse_day(s: str) -> date:
 
 
 def _ensure_dirs(
-    base: Path, coord_sets: List[str] = ["raw", "wgs84"]
+    base: Path, coord_sets: Optional[List[str]] = None
 ) -> dict[str, dict[str, Path]]:
-    """确保导出目录存在，支持多套坐标系"""
+    """
+    确保导出目录存在，支持多套坐标系或无坐标系
+
+    Args:
+        base: 基础导出目录
+        coord_sets: 坐标系列表，如果为 None 则创建无坐标系的目录结构
+
+    Returns:
+        目录结构映射
+    """
+    if coord_sets is None:
+        # 无坐标系（如天气数据），直接在基础目录下创建格式目录
+        dirs = {}
+        for fmt in ["csv", "geojson"]:
+            fmt_dir = base / f"{fmt}_zip"
+            fmt_dir.mkdir(parents=True, exist_ok=True)
+            dirs[fmt] = fmt_dir
+        return {"no_coord": dirs}
+
+    # 多坐标系支持（如共享单车数据）
     dirs = {}
     for coord_set in coord_sets:
         coord_dir = base / coord_set
@@ -524,13 +551,23 @@ def export_date_range(
 
 
 if __name__ == "__main__":
-    """命令行测试"""
-    ap = argparse.ArgumentParser()
+    """命令行工具 - 支持多 profile 导出"""
+    ap = argparse.ArgumentParser(
+        description="按天导出数据为 CSV 和 GeoJSON 格式，支持多数据集和多坐标系"
+    )
+    ap.add_argument(
+        "--profile",
+        default="bike",
+        choices=["bike", "weather_grid"],
+        help="数据集配置（默认: bike 共享单车）",
+    )
     ap.add_argument("--start", required=True, help="开始日期 YYYYMMDD")
     ap.add_argument("--end", required=True, help="结束日期 YYYYMMDD")
-    ap.add_argument("--table", default="shenzhen_rides", help="表名")
-    ap.add_argument("--coord-sets", default="raw,wgs84", help="坐标系")
-    ap.add_argument("--formats", default="csv,geojson", help="导出格式")
+    ap.add_argument("--table", default="", help="表名（留空则使用 profile 中的表名）")
+    ap.add_argument(
+        "--coord-sets", default="", help="坐标系，逗号分隔（留空则使用 profile 配置）"
+    )
+    ap.add_argument("--formats", default="csv,geojson", help="导出格式，逗号分隔")
     ap.add_argument("--output", default="data/share", help="输出目录")
     ap.add_argument("--batch", type=int, default=50000, help="批处理大小")
     ap.add_argument(
@@ -539,16 +576,39 @@ if __name__ == "__main__":
 
     args = ap.parse_args()
 
+    # 加载 profile 配置
+    profile = get_profile(args.profile)
+    logger.info(f"使用数据集配置: {profile.name}")
+
     start_date = parse_day(args.start)
     end_date = parse_day(args.end)
-    coord_sets = [f.strip() for f in args.coord_sets.split(",")]
-    formats = [f.strip() for f in args.formats.split(",")]
+
+    # 使用 profile 中的表名（如果未指定）
+    table = args.table or profile.table_name
+
+    # 确定坐标系
+    if args.coord_sets:
+        # 用户指定了坐标系
+        coord_sets = [f.strip() for f in args.coord_sets.split(",") if f.strip()]
+    elif profile.export_support_coord_sets:
+        # 使用 profile 默认的坐标系（共享单车默认 raw, wgs84）
+        coord_sets = ["raw", "wgs84"]
+    else:
+        # 无坐标系（天气数据）
+        coord_sets = None
+
+    formats = [f.strip() for f in args.formats.split(",") if f.strip()]
 
     conn_str = settings.get_conn_str()
 
+    logger.info(f"表名: {table}")
+    logger.info(f"坐标系: {coord_sets if coord_sets else '无（仅导出属性数据）'}")
+    logger.info(f"格式: {formats}")
+    logger.info(f"日期范围: {start_date} 到 {end_date}")
+
     export_date_range(
         conn_str=conn_str,
-        table=args.table,
+        table=table,
         start_date=start_date,
         end_date=end_date,
         output_base=Path(args.output),

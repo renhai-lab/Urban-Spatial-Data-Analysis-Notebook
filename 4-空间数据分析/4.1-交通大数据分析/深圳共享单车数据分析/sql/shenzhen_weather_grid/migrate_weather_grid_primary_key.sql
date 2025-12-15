@@ -40,7 +40,7 @@ CREATE TABLE sz_weather_grid (
     wd3smaxdf DOUBLE PRECISION,
     wd3smaxdd DOUBLE PRECISION,
     crttime TIMESTAMPTZ NOT NULL,
-    keyid TEXT UNIQUE NOT NULL,
+    keyid TEXT NOT NULL,
     PRIMARY KEY (keyid, crttime)
 );
 
@@ -54,9 +54,31 @@ CREATE INDEX idx_wg_crttime ON sz_weather_grid (crttime);
 CREATE INDEX idx_wg_forecasttime ON sz_weather_grid (forecasttime);
 CREATE INDEX idx_wg_gridid ON sz_weather_grid (gridid);
 
--- 从备份表恢复数据
-INSERT INTO sz_weather_grid 
-SELECT * FROM sz_weather_grid_backup;
+-- 去重后恢复数据：保留同 (keyid, crttime) 里 id 最大的记录
+WITH deduped AS (
+    SELECT DISTINCT ON (keyid, crttime)
+        id, recid, ddatetime, gridid, ybsx, forecasttime, plevel, t,
+        wspd, wdir, slp, rhsfc, rain01h, rain03h, rain06h, rain24h,
+        v, tracerr01h, maxtofday, rain02h, wd3smaxdf, wd3smaxdd,
+        crttime, keyid
+    FROM sz_weather_grid_backup
+    ORDER BY keyid, crttime, id DESC
+), dup_report AS (
+    SELECT keyid, crttime, COUNT(*) AS cnt, array_agg(id ORDER BY id) AS ids
+    FROM sz_weather_grid_backup
+    GROUP BY keyid, crttime
+    HAVING COUNT(*) > 1
+)
+INSERT INTO sz_weather_grid (
+    id, recid, ddatetime, gridid, ybsx, forecasttime, plevel, t,
+    wspd, wdir, slp, rhsfc, rain01h, rain03h, rain06h, rain24h,
+    v, tracerr01h, maxtofday, rain02h, wd3smaxdf, wd3smaxdd,
+    crttime, keyid
+)
+SELECT * FROM deduped;
+
+-- 可选：查看被去重的重复情况
+TABLE dup_report;
 
 -- 验证数据完整性
 SELECT 

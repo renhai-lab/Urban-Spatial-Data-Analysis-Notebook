@@ -74,6 +74,14 @@ class DatasetProfile:
     partition_interval: str = "1 day"
     # 是否需要坐标转换（用于异步抓取时决定是否使用线程池转换）
     needs_coord_transform: bool = False
+    # 导出配置：导出时的日期时间列（用于按日期筛选数据）
+    export_datetime_column: str = "start_time"
+    # 导出配置：导出时的主要时间戳格式（用于时区转换）
+    export_tz: str = "Asia/Shanghai"
+    # 导出配置：是否支持多坐标系导出（False 表示只支持单坐标系）
+    export_support_coord_sets: bool = True
+    # 导出配置：地理坐标列的映射 {"coord_set": {"start_lon": "...", "start_lat": "...", "end_lon": "...", "end_lat": "..."}}
+    export_geom_columns: Optional[Dict[str, Dict[str, str]]] = None
 
     def prepare_record(self, record: dict):  # pragma: no cover - 子类实现
         """
@@ -195,6 +203,23 @@ class BikeProfile(DatasetProfile):
             partition_column="start_time",
             partition_interval="1 day",
             needs_coord_transform=True,
+            export_datetime_column="start_time",
+            export_tz="Asia/Shanghai",
+            export_support_coord_sets=True,
+            export_geom_columns={
+                "raw": {
+                    "start_lon": "start_lng_raw",
+                    "start_lat": "start_lat_raw",
+                    "end_lon": "end_lng_raw",
+                    "end_lat": "end_lat_raw",
+                },
+                "wgs84": {
+                    "start_lon": "start_lng_wgs84",
+                    "start_lat": "start_lat_wgs84",
+                    "end_lon": "end_lng_wgs84",
+                    "end_lat": "end_lat_wgs84",
+                },
+            },
         )
 
     def prepare_record(self, record: dict):
@@ -353,7 +378,7 @@ class WeatherGridProfile(DatasetProfile):
             wd3smaxdf DOUBLE PRECISION,
             wd3smaxdd DOUBLE PRECISION,
             crttime TIMESTAMPTZ NOT NULL,
-            keyid TEXT UNIQUE NOT NULL,
+            keyid TEXT NOT NULL,
             PRIMARY KEY (keyid, crttime)
             """,
             indexes=[
@@ -361,10 +386,14 @@ class WeatherGridProfile(DatasetProfile):
                 IndexSpec(name="idx_wg_forecasttime", columns_sql="forecasttime"),
                 IndexSpec(name="idx_wg_gridid", columns_sql="gridid"),
             ],
-            latest_date_column="crttime",
+            latest_date_column="crttime",  # 用于读取最近时间的数据
             enable_timescale=True,
             partition_column="crttime",  # 分区列
             partition_interval="1 day",
+            export_datetime_column="crttime",
+            export_tz="Asia/Shanghai",
+            export_support_coord_sets=False,  # 天气数据没有地理坐标
+            export_geom_columns=None,  # 无地理坐标列
         )
 
     def prepare_record(self, record: dict):

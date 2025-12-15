@@ -62,7 +62,7 @@ if sys.platform.startswith("win") and hasattr(
 def get_memory_usage():
     """
     获取当前进程的内存使用情况
-    
+
     Returns:
         float: 内存使用量（MB）
     """
@@ -594,7 +594,7 @@ async def process_single_day_pipeline(
                 has_data = await verify_day_completeness(conn_str, profile, target_date)
                 if has_data:
                     logger.info(f"{target_date} 发现已有数据，为确保完整性将重新获取")
-                    await delete_incomplete_day_data(conn_str, profile, target_date)
+                    # await delete_incomplete_day_data(conn_str, profile, target_date)
 
             # 获取数据
             records, stats = await fetch_day_optimized(
