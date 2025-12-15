@@ -8,13 +8,13 @@
 
 用法示例：
     # 全库，一次跑完，单批 10000
-    uv run python -m scr.data_pipline.backfill_wgs84_from_raw --batch 10000 --dry-run false
+    uv run python -m src.data_pipeline.backfill_wgs84_from_raw --batch 10000 --dry-run false
 
     # 指定日期范围（北京时间）
-    uv run python -m scr.data_pipline.backfill_wgs84_from_raw --start 20210101 --end 20210830 --batch 5000 --dry-run false --log-every 1 --scan-all-ids true
+    uv run python -m src.data_pipeline.backfill_wgs84_from_raw --start 20210101 --end 20210830 --batch 5000 --dry-run false --log-every 1 --scan-all-ids true
 
     # 断点续跑（从 last_id 继续）
-    uv run python -m scr.data_pipline.backfill_wgs84_from_raw --resume-id 55860000 --batch 10000 --dry-run false --scan-all-ids true
+    uv run python -m src.data_pipeline.backfill_wgs84_from_raw --resume-id 55860000 --batch 10000 --dry-run false --scan-all-ids true
 """
 
 from __future__ import annotations

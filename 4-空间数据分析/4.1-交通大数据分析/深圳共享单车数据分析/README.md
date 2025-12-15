@@ -2,14 +2,14 @@
 
 本项目聚焦两部分：
 
-- scr/data_pipline：面向"共享单车"和"气象格点"两类数据集的数据获取与入库流水线
+- src/data_pipeline：面向"共享单车"和"气象格点"两类数据集的数据获取与入库流水线
 - sql：PostGIS 下的空间表构建、天气格网几何生成、视图与索引脚本
 
 ## 项目特色
 
 - *## 获取"全量数据"不建议使用 fetcher-legacy.py 的原因
 
-`scr/data_pipline/fetcher-legacy.py` 为教学/演示用简化脚本，特点是按页追加写 CSV：
+`src/data_pipeline/fetcher-legacy.py` 为教学/演示用简化脚本，特点是按页追加写 CSV：
 
 - 不做断点续跑、去重与强健重试；异常页会中断或丢失
 - 单线程请求，面对 2.4 亿量级极慢；CSV 体量与 I/O 成本高
@@ -18,11 +18,11 @@
 
 因此：
 
-- **全量与长周期采集**，请使用异步版 `scr/data_pipline/fetcher.py` + TimescaleDB + PostGIS 入库
+- **全量与长周期采集**，请使用异步版 `src/data_pipeline/fetcher.py` + TimescaleDB + PostGIS 入库
 - **若仅需"某一天"的样例数据/快速 CSV**，可用 legacy：
 
 ```bash
-python scr\data_pipline\fetcher-legacy.py
+python src\data_pipeline\fetcher-legacy.py
 # 将 startDate=endDate 设置为目标日期（如 20210101），输出到 data/raw/
 ```
 
@@ -38,7 +38,7 @@ python scr\data_pipline\fetcher-legacy.py
 
 本项目聚焦两部分：
 
-- scr/data_pipline：面向“共享单车”和“气象格点”两类数据集的数据获取与入库流水线
+- src/data_pipeline：面向“共享单车”和“气象格点”两类数据集的数据获取与入库流水线
 - sql：PostGIS 下的空间表构建、天气格网几何生成、视图与索引脚本
 
 ## 项目特色
@@ -108,13 +108,13 @@ CREATE EXTENSION IF NOT EXISTS postgis;
 
 ## 配置（.env）
 
-在项目根目录复制 `.env.example` 并编辑 `.env`（可覆盖 `scr/data_pipline/config.py` 中的值）。
+在项目根目录复制 `.env.example` 并编辑 `.env`（可覆盖 `src/data_pipeline/config.py` 中的值）。
 
 密钥一定要保存在 `.env` 中。
 
-更多项见 `scr/data_pipline/config.py`。
+更多项见 `src/data_pipeline/config.py`。
 
-## 数据集 Profiles（scr/data_pipline）
+## 数据集 Profiles（src/data_pipeline）
 
 - bike（共享单车）
 
@@ -145,16 +145,16 @@ CREATE EXTENSION IF NOT EXISTS postgis;
 
 ```bash
 # 方式 A：使用 uv 运行（推荐）
-uv run python -m scr.data_pipline.fetcher
+uv run python -m src.data_pipeline.fetcher
 
 # 方式 B：现有虚拟环境
-.venv\Scripts\python -m scr.data_pipline.fetcher
+.venv\Scripts\python -m src.data_pipeline.fetcher
 
 # 指定日期范围 不指定日期的时候会从数据库中读取最新的日期 然后开始往后爬取
-uv run python -m scr.data_pipline.fetcher --start 20210101 --end 20210105
+uv run python -m src.data_pipeline.fetcher --start 20210101 --end 20210105
 
 # 同时导出双坐标系数据
-uv run python -m scr.data_pipline.fetcher --start 20210101 --end 20210105 \
+uv run python -m src.data_pipeline.fetcher --start 20210101 --end 20210105 \
   --auto-export --export-coord-sets raw,wgs84 --export-formats csv,geojson
 ```
 
@@ -162,11 +162,11 @@ uv run python -m scr.data_pipline.fetcher --start 20210101 --end 20210105 \
 
 ```bash
 # 导出指定日期范围的数据
-uv run python -m scr.data_pipline.export_share --start 20210101 --end 20210102 \
+uv run python -m src.data_pipeline.export_share --start 20210101 --end 20210102 \
   --coord-sets wgs84 --formats csv,geojson --batch 50000 --out data/share
 
 # 同时导出原始坐标和WGS84坐标
-uv run python -m scr.data_pipline.export_share --start 20210101 --end 20210102 \
+uv run python -m src.data_pipeline.export_share --start 20210101 --end 20210102 \
   --coord-sets raw,wgs84 --formats csv,geojson --batch 50000 --out data/share
 ```
 
@@ -184,7 +184,7 @@ uv run python -m scr.data_pipline.export_share --start 20210101 --end 20210102 \
 
 按天核查工具：统计数据库内每日条数，找出缺失天/异常天，并导出 CSV。
 
-`uv run python -m scr.data_pipline.audit_days`
+`uv run python -m src.data_pipeline.audit_days`
 
 输出：
 
@@ -195,7 +195,7 @@ uv run python -m scr.data_pipline.export_share --start 20210101 --end 20210102 \
 
 ## 获取“全量数据”不建议使用 fetcher-legacy.py 的原因
 
-`scr/data_pipline/fetcher-legacy.py` 为教学/演示用简化脚本，特点是按页追加写 CSV：
+`src/data_pipeline/fetcher-legacy.py` 为教学/演示用简化脚本，特点是按页追加写 CSV：
 
 - 不做断点续跑、去重与强健重试；异常页会中断或丢失
 - 单线程请求，面对 2.4 亿量级极慢；CSV 体量与 I/O 成本高
@@ -203,11 +203,11 @@ uv run python -m scr.data_pipline.export_share --start 20210101 --end 20210102 \
 
 因此：
 
-- 全量与长周期采集，请使用异步版 `scr/data_pipline/fetcher.py` + PostGIS 入库
+- 全量与长周期采集，请使用异步版 `src/data_pipeline/fetcher.py` + PostGIS 入库
 - 若仅需“某一天”的样例数据/快速 CSV，可用 legacy：
 
 ```powershell
-python scr\data_pipline\fetcher-legacy.py
+python src\data_pipeline\fetcher-legacy.py
 # 将 startDate=endDate 设置为目标日期（如 20210101），输出到 data/raw/
 ```
 

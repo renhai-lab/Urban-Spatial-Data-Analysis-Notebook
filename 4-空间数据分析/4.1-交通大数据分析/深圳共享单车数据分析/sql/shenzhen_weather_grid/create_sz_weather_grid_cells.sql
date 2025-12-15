@@ -54,5 +54,5 @@ CREATE TABLE public.sz_weather_grid_cells (
 COMMIT;
 
 -- 接下来，请执行：
---  1) 用 \copy 导入 CSV 到 stage
+--  1) 使用 \copy ... FROM data/深圳范围自动站实况格点信息表_2920000903510.csv 按列顺序导入到 sz_weather_grid_cells_stage
 --  2) 运行 sql/load_sz_weather_grid_cells.sql 完成转换、建索引

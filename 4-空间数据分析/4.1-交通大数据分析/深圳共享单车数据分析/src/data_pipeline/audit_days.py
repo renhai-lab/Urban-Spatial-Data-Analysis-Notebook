@@ -2,8 +2,8 @@
 按天核查工具：统计数据库内每日条数，找出缺失天/异常天，并导出 CSV。
 
 用法：
-- 基本用法：uv run python -m scr.data_pipline.audit_days
-- 跳过空数据天的API对比：uv run python -m scr.data_pipline.audit_days --skip-empty-days
+- 基本用法：uv run python -m src.data_pipeline.audit_days
+- 跳过空数据天的API对比：uv run python -m src.data_pipeline.audit_days --skip-empty-days
 
 输出：
 - （可以查看每天有多少数据）data/audit/daily_counts.csv：包含 day,cnt 两列

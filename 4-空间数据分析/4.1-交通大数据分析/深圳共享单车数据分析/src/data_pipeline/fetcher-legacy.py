@@ -1,6 +1,6 @@
 """
 本数据集为“2021深圳开放数据应用创新大赛”的静态样例数据，不再更新，也无法提供其他数据项。
-本脚本已模块化：配置见 scr/config.py，数据集定义见 scr/profiles.py，数据库见 scr/db.py。
+本脚本已模块化：配置见 src/config.py，数据集定义见 src/profiles.py，数据库见 src/db.py。
 """
 
 import asyncio

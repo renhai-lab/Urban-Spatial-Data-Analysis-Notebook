@@ -105,12 +105,12 @@ EXPORT_BATCH_SIZE: int = 50000  # 批处理大小，内存不足可减小
 
 ### 1. 数据获取（已优化）
 ```bash
-uv run python -m scr.data_pipline.fetcher --auto-export --export-coord-sets raw,wgs84 --export-formats csv,geojson
+uv run python -m src.data_pipeline.fetcher --auto-export --export-coord-sets raw,wgs84 --export-formats csv,geojson
 ```
 
 ### 2. 单独导出（已优化）
 ```bash
-uv run python -m scr.data_pipline.export_share --start 20210101 --end 20210102 --workers 4
+uv run python -m src.data_pipeline.export_share --start 20210101 --end 20210102 --workers 4
 ```
 
 ### 3. 测试优化效果

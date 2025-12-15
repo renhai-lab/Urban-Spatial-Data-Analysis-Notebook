@@ -60,10 +60,10 @@ cp .env.example .env
 uv sync
 
 # 获取一天的数据进行测试
-uv run python -m scr.data_pipline.fetcher --start 20210118 --end 20210118
+uv run python -m src.data_pipeline.fetcher --start 20210118 --end 20210118
 
 # 如果成功，获取更多数据
-uv run python -m scr.data_pipline.fetcher --start 20210101 --end 20210105
+uv run python -m src.data_pipeline.fetcher --start 20210101 --end 20210105
 ```
 
 ## 📊 获取和导出数据
@@ -72,10 +72,10 @@ uv run python -m scr.data_pipline.fetcher --start 20210101 --end 20210105
 
 ```bash
 # 获取指定日期范围的数据
-uv run python -m scr.data_pipline.fetcher --start 20210101 --end 20210130
+uv run python -m src.data_pipeline.fetcher --start 20210101 --end 20210130
 
 # 同时获取数据并导出
-uv run python -m scr.data_pipline.fetcher --start 20210101 --end 20210105 \
+uv run python -m src.data_pipeline.fetcher --start 20210101 --end 20210105 \
   --auto-export --export-coord-sets raw,wgs84 --export-formats csv,geojson
 ```
 
@@ -83,11 +83,11 @@ uv run python -m scr.data_pipline.fetcher --start 20210101 --end 20210105 \
 
 ```bash
 # 导出 WGS84 坐标数据（推荐）
-uv run python -m scr.data_pipline.export_share --start 20210101 --end 20210105 \
+uv run python -m src.data_pipeline.export_share --start 20210101 --end 20210105 \
   --coord-sets wgs84 --formats csv,geojson --out data/share
 
 # 导出双坐标系数据
-uv run python -m scr.data_pipline.export_share --start 20210101 --end 20210105 \
+uv run python -m src.data_pipeline.export_share --start 20210101 --end 20210105 \
   --coord-sets raw,wgs84 --formats csv,geojson --out data/share
 ```
 
@@ -168,7 +168,7 @@ plt.show()
 
 ```bash
 # 检查数据完整性
-uv run python -m scr.data_pipline.audit_days
+uv run python -m src.data_pipeline.audit_days
 
 # 查看审计报告
 cat data/audit/daily_counts_with_api.csv
