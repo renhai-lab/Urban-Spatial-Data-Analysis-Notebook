@@ -135,8 +135,8 @@ CREATE EXTENSION IF NOT EXISTS postgis;
 - weather_grid（深圳范围自动站实况格点）
 
   - 表：sz_weather_grid
-  - 列：recid、ddatetime、gridid、…、crttime、keyid（详见 `profiles.py`）
-  - 索引：crttime、ddatetime、gridid
+  - 列：recid、datetime、gridid、…、crttime、keyid（详见 `profiles.py`）
+  - 索引：crttime、datetime、gridid
   - 增量列：crttime
 
 ## 快速运行
@@ -236,7 +236,7 @@ FROM 'data/raw/深圳范围自动站实况格点信息表_2920000903510.csv' CSV
 1. 视图（views_sz_weather_grid.sql）
 
 - `v_sz_weather_grid`：几何与观测全量联接
-- `v_sz_weather_grid_latest`：每格最新一条（按 ddatetime 优先，否则 crttime），便于快速绘图/统计
+- `v_sz_weather_grid_latest`：每格最新一条（按 datetime 优先，否则 crttime），便于快速绘图/统计
 
 执行顺序建议：create → 导入 CSV → load → augment → views。
 

@@ -36,6 +36,8 @@ class DatasetProfile:
     partition_column: str = "start_time"
     # 新增：分区间隔（如 '1 day', '1 week'）
     partition_interval: str = "1 day"
+    # 是否需要坐标转换（用于异步抓取时决定是否使用线程池转换）
+    needs_coord_transform: bool = False
 
     def prepare_record(self, record: dict):  # pragma: no cover - overridden
         raise NotImplementedError
@@ -122,6 +124,7 @@ class BikeProfile(DatasetProfile):
             enable_timescale=True,
             partition_column="start_time",
             partition_interval="1 day",
+            needs_coord_transform=True,
         )
 
     def prepare_record(self, record: dict):
@@ -224,7 +227,7 @@ class WeatherGridProfile(DatasetProfile):
                 "keyid",
             ],
             table_columns_sql="""
-            id BIGSERIAL PRIMARY KEY,
+            id BIGSERIAL,
             recid TEXT,
             ddatetime TIMESTAMPTZ NOT NULL,
             gridid TEXT,
@@ -246,17 +249,18 @@ class WeatherGridProfile(DatasetProfile):
             rain02h DOUBLE PRECISION,
             wd3smaxdf DOUBLE PRECISION,
             wd3smaxdd DOUBLE PRECISION,
-            crttime TIMESTAMPTZ,
-            keyid TEXT
+            crttime TIMESTAMPTZ NOT NULL,
+            keyid TEXT,
+            PRIMARY KEY (id, crttime)
             """,
             indexes=[
                 IndexSpec(name="idx_wg_crttime", columns_sql="crttime"),
-                IndexSpec(name="idx_wg_ddatetime", columns_sql="ddatetime"),
+                IndexSpec(name="idx_wg_forecasttime", columns_sql="forecasttime"),
                 IndexSpec(name="idx_wg_gridid", columns_sql="gridid"),
             ],
             latest_date_column="crttime",
             enable_timescale=True,
-            partition_column="ddatetime",
+            partition_column="crttime",
             partition_interval="1 day",
         )
 

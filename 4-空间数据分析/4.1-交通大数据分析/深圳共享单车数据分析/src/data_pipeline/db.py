@@ -52,6 +52,10 @@ async def setup_database(conn_str: str, profile: DatasetProfile):
                         logger.info(f"TimescaleDB分区已设置：{profile.partition_interval}")
                 except Exception as e:
                     logger.warning(f"TimescaleDB分区设置失败：{e}")
+                    try:
+                        await aconn.rollback()
+                    except Exception:
+                        pass
 
             # 4. 创建索引
             logger.info("正在创建索引（如果不存在）...")
