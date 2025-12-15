@@ -1084,7 +1084,7 @@ def main():
     ap.add_argument(
         "--auto-export",
         action="store_true",
-        default=True,
+        default=False,
         help="完成数据获取后自动导出",
     )
     ap.add_argument(
