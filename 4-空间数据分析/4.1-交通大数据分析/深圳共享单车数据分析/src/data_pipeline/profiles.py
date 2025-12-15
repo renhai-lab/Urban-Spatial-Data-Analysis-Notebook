@@ -27,12 +27,13 @@ from .coords import gcj02_to_wgs84
 class IndexSpec:
     """
     数据库索引规格定义
-    
+
     Attributes:
         name: 索引名称
         columns_sql: 索引列的 SQL 定义
         using: 索引类型（如 'btree', 'gist' 等），可选
     """
+
     name: str
     columns_sql: str
     using: Optional[str] = None
@@ -42,11 +43,11 @@ class IndexSpec:
 class DatasetProfile:
     """
     数据集配置基类
-    
+
     定义了每个数据集的基本配置信息，包括 API 接口、数据库表结构、
     索引配置、时序分区设置等。子类需要实现 prepare_record 方法
     来处理具体的数据记录。
-    
+
     Attributes:
         name: 数据集名称（用于日志显示）
         api_url: 数据获取 API 地址
@@ -59,6 +60,7 @@ class DatasetProfile:
         partition_column: 时序分区的时间列名
         partition_interval: 分区时间间隔
     """
+
     name: str
     api_url: str
     table_name: str
@@ -76,13 +78,13 @@ class DatasetProfile:
     def prepare_record(self, record: dict):  # pragma: no cover - 子类实现
         """
         处理单条记录的抽象方法
-        
+
         子类必须实现此方法来处理从 API 获取的原始数据记录，
         包括数据清洗、格式转换、坐标转换等操作。
-        
+
         Args:
             record: 从 API 获取的原始数据记录
-            
+
         Returns:
             处理后的数据记录，格式需要与 copy_columns 对应
         """
@@ -91,9 +93,9 @@ class DatasetProfile:
     def field_labels(self) -> Dict[str, str]:
         """
         返回字段名到中文描述的映射
-        
+
         用于数据导出时的字段标签显示。
-        
+
         Returns:
             Dict[str, str]: 字段名到中文描述的映射字典
         """
@@ -102,7 +104,7 @@ class DatasetProfile:
     def get_timescale_setup_sql(self) -> str:
         """
         生成 TimescaleDB 分区设置的 SQL 语句
-        
+
         Returns:
             str: TimescaleDB 分区设置的 SQL 语句，如果未启用则返回空字符串
         """
@@ -120,13 +122,13 @@ class DatasetProfile:
 class BikeProfile(DatasetProfile):
     """
     深圳共享单车数据集配置类
-    
+
     针对深圳市政府开放数据平台的共享单车数据进行优化配置：
-    - 实时坐标转换（GCJ-02 转 WGS84）  
+    - 实时坐标转换（GCJ-02 转 WGS84）
     - 简化的表结构设计
     - TimescaleDB 时序分区支持
     - 完整的字段中文标签
-    
+
     数据来源：深圳市政府数据开放平台 - 互联网租赁自行车停放点位数据
     """
 
@@ -198,16 +200,16 @@ class BikeProfile(DatasetProfile):
     def prepare_record(self, record: dict):
         """
         处理单条共享单车记录
-        
+
         执行以下操作：
         1. 解析起止时间（北京时间转UTC）
         2. 提取原始坐标信息
         3. 执行坐标转换（GCJ-02 -> WGS84）
         4. 生成 PostGIS 兼容的 WKT 格式坐标
-        
+
         Args:
             record: 从 API 获取的原始数据记录
-            
+
         Returns:
             tuple: 处理后的数据元组，对应 copy_columns 的顺序
         """
@@ -251,23 +253,23 @@ class BikeProfile(DatasetProfile):
 
         # 返回处理后的数据元组
         return (
-            record.get("USER_ID"),        # 用户标识
-            record.get("COM_ID"),         # 运营商标识
-            start_time_utc,               # 开始时间（UTC）
-            end_time_utc,                 # 结束时间（UTC）
-            start_geom_raw_wkt,          # 起点原始坐标
-            end_geom_raw_wkt,            # 终点原始坐标
-            start_geom_wgs84_wkt,        # 起点 WGS84 坐标
-            end_geom_wgs84_wkt,          # 终点 WGS84 坐标
-            "GCJ-02",                    # 原始坐标系标识
+            record.get("USER_ID"),  # 用户标识
+            record.get("COM_ID"),  # 运营商标识
+            start_time_utc,  # 开始时间（UTC）
+            end_time_utc,  # 结束时间（UTC）
+            start_geom_raw_wkt,  # 起点原始坐标
+            end_geom_raw_wkt,  # 终点原始坐标
+            start_geom_wgs84_wkt,  # 起点 WGS84 坐标
+            end_geom_wgs84_wkt,  # 终点 WGS84 坐标
+            "GCJ-02",  # 原始坐标系标识
         )
 
     def field_labels(self) -> Dict[str, str]:
         """
         返回字段的中文标签映射
-        
+
         用于数据导出和可视化时显示友好的中文字段名。
-        
+
         Returns:
             Dict[str, str]: 字段名到中文描述的映射
         """
@@ -288,12 +290,12 @@ class BikeProfile(DatasetProfile):
 class WeatherGridProfile(DatasetProfile):
     """
     深圳气象格点数据集配置类
-    
+
     针对深圳市政府开放数据平台的气象格点数据进行配置：
     - 网格化气象数据存储
     - 时序数据分区优化
     - 多气象要素支持（温度、风速、湿度等）
-    
+
     数据来源：深圳市政府数据开放平台 - 气象格点数据
     """
 
@@ -351,8 +353,8 @@ class WeatherGridProfile(DatasetProfile):
             wd3smaxdf DOUBLE PRECISION,
             wd3smaxdd DOUBLE PRECISION,
             crttime TIMESTAMPTZ NOT NULL,
-            keyid TEXT,
-            PRIMARY KEY (id, crttime)
+            keyid TEXT UNIQUE NOT NULL,
+            PRIMARY KEY (keyid, crttime)
             """,
             indexes=[
                 IndexSpec(name="idx_wg_crttime", columns_sql="crttime"),
@@ -361,7 +363,7 @@ class WeatherGridProfile(DatasetProfile):
             ],
             latest_date_column="crttime",
             enable_timescale=True,
-            partition_column="crttime",
+            partition_column="crttime",  # 分区列
             partition_interval="1 day",
         )
 
