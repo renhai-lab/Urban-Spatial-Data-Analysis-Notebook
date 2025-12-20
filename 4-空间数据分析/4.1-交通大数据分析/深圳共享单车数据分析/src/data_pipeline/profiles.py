@@ -379,7 +379,7 @@ class WeatherGridProfile(DatasetProfile):
             wd3smaxdd DOUBLE PRECISION,
             crttime TIMESTAMPTZ NOT NULL,
             keyid TEXT NOT NULL,
-            PRIMARY KEY (keyid, crttime)
+            PRIMARY KEY (recid, forecasttime)
             """,
             indexes=[
                 IndexSpec(name="idx_wg_crttime", columns_sql="crttime"),
@@ -388,9 +388,9 @@ class WeatherGridProfile(DatasetProfile):
             ],
             latest_date_column="crttime",  # 用于读取最近时间的数据
             enable_timescale=True,
-            partition_column="crttime",  # 分区列
+            partition_column="forecasttime",  # 分区列
             partition_interval="1 day",
-            export_datetime_column="crttime",
+            export_datetime_column="forecasttime",
             export_tz="Asia/Shanghai",
             export_support_coord_sets=False,  # 天气数据没有地理坐标
             export_geom_columns=None,  # 无地理坐标列

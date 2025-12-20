@@ -504,13 +504,14 @@ async def fetch_day_optimized(
 async def bulk_insert_with_progress(
     conn_str: str, profile: DatasetProfile, records: list, date_str: str = ""
 ):
-    """批量插入数据到数据库（分批 COPY，带详细进度显示）。"""
+    """批量插入数据到数据库（INSERT ... ON CONFLICT DO NOTHING，跳过重复数据）。"""
     if not records:
         return 0
 
     batch_size = getattr(settings, "DB_BATCH_SIZE", 10000) or 10000
     total = len(records)
     inserted_total = 0
+    skipped_total = 0
 
     # 创建进度条
     progress_desc = f"入库 {date_str}" if date_str else "批量入库"
@@ -521,21 +522,35 @@ async def bulk_insert_with_progress(
         ) as aconn:
             table_ident = sql.Identifier(profile.table_name)
             columns_idents = [sql.Identifier(col) for col in profile.copy_columns]
+            placeholders = sql.SQL(", ").join(
+                [sql.Placeholder() for _ in profile.copy_columns]
+            )
+
+            # 生成 INSERT ... ON CONFLICT DO NOTHING 语句
+            insert_sql = sql.SQL(
+                "INSERT INTO {} ({}) VALUES ({}) ON CONFLICT DO NOTHING"
+            ).format(table_ident, sql.SQL(", ").join(columns_idents), placeholders)
 
             async with aconn.cursor() as acur:
-                copy_sql = sql.SQL("COPY {} ({}) FROM STDIN").format(
-                    table_ident, sql.SQL(", ").join(columns_idents)
-                )
-
                 # 使用 tqdm 创建进度条
                 with tqdm(total=total, desc=progress_desc, unit="records") as pbar:
                     for i in range(0, total, batch_size):
                         batch = records[i : i + batch_size]
-                        async with acur.copy(copy_sql) as copy:
-                            for record in batch:
-                                await copy.write_row(record)
+
+                        # 批量执行 INSERT，每条记录一次 ON CONFLICT DO NOTHING
+                        for record in batch:
+                            try:
+                                result = await acur.execute(insert_sql, record)
+                                # 检查是否插入成功（插入行数 > 0）
+                                if acur.rowcount > 0:
+                                    inserted_total += 1
+                                else:
+                                    skipped_total += 1
+                            except Exception as e:
+                                logger.debug(f"跳过记录: {e}")
+                                skipped_total += 1
+
                         await aconn.commit()
-                        inserted_total += len(batch)
 
                         # 更新进度条
                         pbar.update(len(batch))
@@ -546,15 +561,18 @@ async def bulk_insert_with_progress(
                             {
                                 "memory": f"{memory_mb:.1f}MB",
                                 "table": profile.table_name,
+                                "skipped": skipped_total,
                             }
                         )
 
     except Exception as e:
-        logger.error(f"批量插入失败: {e}（已提交 {inserted_total:,}/{total:,}）")
+        logger.error(
+            f"批量插入失败: {e}（已插入 {inserted_total:,}，已跳过 {skipped_total:,}）"
+        )
         return inserted_total
 
     logger.success(
-        f"成功提交 {inserted_total:,}/{total:,} 条记录到 {profile.table_name}"
+        f"成功提交 {inserted_total:,}/{total:,} 条记录到 {profile.table_name}（跳过 {skipped_total:,} 条重复数据）"
     )
     return inserted_total
 
@@ -594,7 +612,7 @@ async def process_single_day_pipeline(
                 has_data = await verify_day_completeness(conn_str, profile, target_date)
                 if has_data:
                     logger.info(f"{target_date} 发现已有数据，为确保完整性将重新获取")
-                    # await delete_incomplete_day_data(conn_str, profile, target_date)
+                    await delete_incomplete_day_data(conn_str, profile, target_date)
 
             # 获取数据
             records, stats = await fetch_day_optimized(
@@ -1128,7 +1146,7 @@ def main():
     ap.add_argument(
         "--atomic-mode",
         action="store_true",
-        default=True,
+        default=False,
         help="启用原子性模式（确保数据完整性，适用于重要数据）",
     )
     ap.add_argument(

@@ -76,8 +76,11 @@ def fetch_daily_counts_db(conn_str: str, profile: DatasetProfile) -> pd.DataFram
 
 async def fetch_api_total_for_day_async(
     session: aiohttp.ClientSession, day_str8: str, profile: DatasetProfile
-) -> int | None:
-    """异步调用 API 获取单日 total。400/404 视为 0；HTML/空数组按 0。"""
+) -> tuple[int | None, str | None]:
+    """异步调用 API 获取单日 total。
+
+    返回 (total, flag)。flag 用于标记异常场景，例如 total=1 但 data 为空，避免被误判为缺失天。
+    400/404 视为 0；HTML/空数组按 0。"""
     params = {
         "appKey": settings.APP_KEY,
         "page": 1,
@@ -99,7 +102,7 @@ async def fetch_api_total_for_day_async(
                 timeout=aiohttp.ClientTimeout(total=15),
             ) as resp:
                 if resp.status in (400, 404):
-                    return 0
+                    return 0, None
                 resp.raise_for_status()
                 try:
                     data = await resp.json(content_type=None)
@@ -107,31 +110,34 @@ async def fetch_api_total_for_day_async(
                     text = await resp.text()
                     txt = (text or "").lower()
                     if "<html" in txt or "<!doctype" in txt:
-                        return 0
+                        return 0, "html_response"
                     try:
                         import json as _json
 
                         data = _json.loads(text)
                     except Exception:
-                        return None
+                        return None, "json_parse_failed"
 
                 if isinstance(data, dict):
                     raw_total = int(data.get("total") or 0)
                     arr = data.get("data")
                     if isinstance(arr, list) and len(arr) == 0:
-                        return 0
-                    return raw_total
-                return None
+                        # API 返回 total=1 但 data 为空，视为异常而非缺失
+                        if raw_total == 1:
+                            return raw_total, "empty_data_but_total_1"
+                        return 0, "empty_data"
+                    return raw_total, None
+                return None, None
         except Exception:
             if attempt < 2:
                 await asyncio.sleep(1 + attempt)
                 continue
-            return None
+            return None, "exception"
 
 
 async def fetch_api_totals_for_days(
     days_str8: list[str], profile: DatasetProfile, concurrency: int = 30
-) -> list[int | None]:
+) -> list[tuple[int | None, str | None]]:
     # Windows 事件循环兼容（避免 psycopg 异步问题；此处仅 aiohttp）
     if sys.platform.startswith("win") and hasattr(
         asyncio, "WindowsSelectorEventLoopPolicy"
@@ -206,8 +212,6 @@ def main(skip_empty_days: bool = False):
     ]
     logger.info(" | ".join(msg))
 
-    if missing:
-        logger.warning("缺失天：" + ", ".join(missing))
     if low:
         logger.warning("低值可疑天：" + ", ".join(low))
 
@@ -234,17 +238,19 @@ def main(skip_empty_days: bool = False):
 
         days_fmt = pd.to_datetime(df_filtered["day"]).dt.strftime("%Y-%m-%d").tolist()
         days_str8 = pd.to_datetime(df_filtered["day"]).dt.strftime("%Y%m%d").tolist()
-        api_totals: list[int | None] = asyncio.run(
+        api_results = asyncio.run(
             fetch_api_totals_for_days(days_str8, profile, concurrency=30)
         )
 
         norm_api_totals: list[int | None] = []
-        for x in api_totals:
-            if x is None:
+        api_flags: list[str | None] = []
+        for total_val, flag in api_results:
+            api_flags.append(flag)
+            if total_val is None:
                 norm_api_totals.append(None)
             else:
                 try:
-                    norm_api_totals.append(int(x))
+                    norm_api_totals.append(int(total_val))
                 except Exception:
                     norm_api_totals.append(None)
 
@@ -253,6 +259,7 @@ def main(skip_empty_days: bool = False):
                 "day": days_fmt,
                 "db_count": [int(v) for v in df_filtered["cnt"].tolist()],
                 "api_total": norm_api_totals,
+                "api_flag": api_flags,
             }
         )
         df_api["delta"] = df_api["api_total"].astype("Int64") - df_api[
@@ -261,6 +268,27 @@ def main(skip_empty_days: bool = False):
         out2 = out_csv_dir / "daily_counts_with_api.csv"
         df_api.to_csv(out2, index=False, encoding="utf-8")
         logger.info(f"已导出 {out2}")
+
+        # 标记 API 返回 total=1 但 data 为空的异常天，避免被误判为缺失
+        flagged = [
+            (d, f) for d, f in zip(df_api["day"].tolist(), api_flags) if f is not None
+        ]
+        flagged_total1_empty = {d for d, f in flagged if f == "empty_data_but_total_1"}
+
+        # 重新计算“缺失天”，过滤掉 API 报 total=1 但 data 为空的日期
+        missing_api_adjusted = [d for d in missing if d not in flagged_total1_empty]
+
+        if missing_api_adjusted:
+            logger.warning(
+                "缺失天（已过滤 API total=1 但 data 为空）："
+                + ", ".join(missing_api_adjusted)
+            )
+        else:
+            logger.info("缺失天：无（API total=1 但 data 为空的日期已被排除）")
+
+        if flagged:
+            flags_msg = ", ".join([f"{d} ({f})" for d, f in flagged])
+            logger.warning("检测到 API 异常返回的天：" + flags_msg)
 
         # 列出明显不一致的天
         mism = df_api[df_api["api_total"].notna() & (df_api["delta"] != 0)]
@@ -282,6 +310,13 @@ def main(skip_empty_days: bool = False):
             logger.info("数据库计数与 API total 一致。")
     else:
         logger.warning("未配置有效 APP_KEY，跳过 API total 对比。")
+
+    # 若未启用 APP_KEY，对缺失天按原逻辑提示
+    if not (settings.APP_KEY and settings.APP_KEY != "YOUR_APP_KEY_HERE"):
+        if missing:
+            logger.warning("缺失天：" + ", ".join(missing))
+        else:
+            logger.info("缺失天：无")
 
 
 if __name__ == "__main__":

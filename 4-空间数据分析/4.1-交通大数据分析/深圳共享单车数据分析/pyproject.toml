@@ -32,5 +32,3 @@ dev = [
     "pyproj>=3.7.2",
 ]
 
-
-packages = [{include = "src"}]
