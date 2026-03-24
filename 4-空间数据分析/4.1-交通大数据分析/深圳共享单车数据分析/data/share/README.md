@@ -17,6 +17,26 @@
 - **CSV（zip）**：推荐给表格分析/简单查看的用户；体积较大，已压缩
 - **GeoJSON（zip）**：推荐给地图可视化/空间分析的用户；体积较大，已压缩；几何为对应目录的"起点"坐标
 
+## 📊 数据规模看板（每日订单量）
+
+> 数据范围：`2021-01-01` ~ `2021-08-30`（共 `242` 天）  
+> 总记录数：`244,412,855` 条（约 2.44 亿）
+
+![图1 每日订单量趋势（含7日均线）](../../docs/figures/share_readme/01_daily_trend_and_rolling7.png)
+
+![图2 数据库计数与API总量对比](../../docs/figures/share_readme/02_db_vs_api.png)
+
+![图3 数据库与API差值时间序列](../../docs/figures/share_readme/03_delta_timeseries.png)
+
+![图4 周内分布箱线图](../../docs/figures/share_readme/04_weekday_boxplot.png)
+
+![图5 月度订单总量](../../docs/figures/share_readme/05_monthly_total_bar.png)
+
+![图6 日历热力图](../../docs/figures/share_readme/06_calendar_heatmap.png)
+
+![图7 异常日高亮（3σ）](../../docs/figures/share_readme/07_outlier_highlight_3sigma.png)
+
+
 ## 目录结构
 
 ```text
